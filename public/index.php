@@ -1,12 +1,13 @@
-<?php
+﻿<?php
 require_once __DIR__ . '/../config/constants.php';
 
 require_once __DIR__ . '/../core/Database.php';
 
 $db = Database::getInstance();
-$categories = $db->fetchAll("SELECT id, name, slug FROM categories WHERE status = ?", [1]);
-
-echo "<pre>"; print_r($categories); echo "</pre>";
+$categories = $db->fetchAll("SELECT id, name, slug, image FROM categories WHERE status = ? ORDER BY id ASC LIMIT 6", [1]);
+$homeProducts = $db->fetchAll("SELECT p.id, p.name, p.price, p.stock, p.image, c.name AS category_name, c.slug AS category_slug FROM products p INNER JOIN categories c ON c.id = p.category_id WHERE p.status = 1 AND c.status = 1 ORDER BY p.created_at DESC, p.id DESC LIMIT 12");
+$placeholderImage = 'https://placehold.co/600x600?text=Product';
+$placeholderCategoryImage = 'https://placehold.co/300x220?text=Category';
 
 
 $page_title = "Molla - Electronic Store (Demo 4)";
@@ -84,6 +85,16 @@ require_once __DIR__ . '/../includes/navbar.php';
                 
                 <div class="cat-blocks-container">
                     <div class="row">
+                        <?php foreach ($categories as $category): ?>
+                            <div class="col-6 col-sm-4 col-lg-2">
+                                <a href="<?= FRONT_URL ?>/shop.php?category=<?= htmlspecialchars($category['slug']) ?>" class="cat-block">
+                                    <?php $categoryImage = !empty($category['image']) && is_file(BASE_PATH . '/public/uploads/categories/' . basename($category['image'])) ? UPLOADS_URL . '/categories/' . rawurlencode(basename($category['image'])) : $placeholderCategoryImage; ?>
+                                    <figure><span><img src="<?= htmlspecialchars($categoryImage) ?>" alt="<?= htmlspecialchars($category['name']) ?>"></span></figure>
+                                    <h3 class="cat-block-title"><?= htmlspecialchars($category['name']) ?></h3>
+                                </a>
+                            </div>
+                        <?php endforeach; ?>
+                        <?php if (false): ?>
                         <div class="col-6 col-sm-4 col-lg-2">
                             <a href="category.html" class="cat-block">
                                 <figure>
@@ -155,6 +166,7 @@ require_once __DIR__ . '/../includes/navbar.php';
                                 <h3 class="cat-block-title">Smart Watches</h3><!-- End .cat-block-title -->
                             </a>
                         </div><!-- End .col-sm-4 col-lg-2 -->
+                        <?php endif; ?>
                     </div><!-- End .row -->
                 </div><!-- End .cat-blocks-container -->
             </div><!-- End .container -->
@@ -209,6 +221,7 @@ require_once __DIR__ . '/../includes/navbar.php';
 
             <div class="mb-3"></div><!-- End .mb-5 -->
 
+            <?php if (false): ?>
             <div class="container new-arrivals">
                 <div class="heading heading-flex mb-3">
                     <div class="heading-left">
@@ -1522,6 +1535,34 @@ require_once __DIR__ . '/../includes/navbar.php';
                     </div><!-- .End .tab-pane -->
                 </div><!-- End .tab-content -->
             </div><!-- End .container -->
+            <?php endif; ?>
+
+            <div class="container new-arrivals">
+                <div class="heading heading-flex mb-3">
+                    <div class="heading-left"><h2 class="title">New Arrivals</h2></div>
+                </div>
+                <div class="owl-carousel owl-full carousel-equal-height carousel-with-shadow" data-toggle="owl" data-owl-options='{"nav":true,"dots":true,"margin":20,"loop":false,"responsive":{"0":{"items":2},"480":{"items":2},"768":{"items":3},"992":{"items":4},"1200":{"items":5}}}'>
+                    <?php foreach ($homeProducts as $product): ?>
+                        <div class="product product-2">
+                            <figure class="product-media">
+                                <?php $productImage = !empty($product['image']) && is_file(BASE_PATH . '/public/uploads/products/' . basename($product['image'])) ? UPLOADS_URL . '/products/' . rawurlencode(basename($product['image'])) : $placeholderImage; ?>
+                                <a href="<?= FRONT_URL ?>/product.php?id=<?= (int)$product['id'] ?>"><img src="<?= htmlspecialchars($productImage) ?>" alt="<?= htmlspecialchars($product['name']) ?>" class="product-image"></a>
+                                <div class="product-action-vertical"><a href="#" class="btn-product-icon btn-wishlist" title="Add to wishlist"></a></div>
+                                <div class="product-action">
+                                    <a href="<?= FRONT_URL ?>/cart.php?action=add&amp;id=<?= (int)$product['id'] ?>" class="btn-product btn-cart" title="Add to cart"><span>add to cart</span></a>
+                                    <a href="<?= FRONT_URL ?>/product.php?id=<?= (int)$product['id'] ?>" class="btn-product" title="View product"><span>view product</span></a>
+                                </div>
+                            </figure>
+                            <div class="product-body">
+                                <div class="product-cat"><a href="<?= FRONT_URL ?>/shop.php?category=<?= htmlspecialchars($product['category_slug']) ?>"><?= htmlspecialchars($product['category_name']) ?></a></div>
+                                <h3 class="product-title"><a href="<?= FRONT_URL ?>/product.php?id=<?= (int)$product['id'] ?>"><?= htmlspecialchars($product['name']) ?></a></h3>
+                                <div class="product-price">$<?= number_format((float)$product['price'], 2) ?></div>
+                                <div class="ratings-container"><div class="ratings"><div class="ratings-val" style="width: 80%;"></div></div><span class="ratings-text">Available: <?= (int)$product['stock'] ?></span></div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
 
             <div class="mb-6"></div><!-- End .mb-6 -->
 
@@ -1532,7 +1573,7 @@ require_once __DIR__ . '/../includes/navbar.php';
                         <div class="col-md-12">
                             <div class="cta-content">
                                 <div class="cta-text text-right text-white">
-                                    <p>Shop Today’s Deals <br><strong>Awesome Made Easy. HERO7 Black</strong></p>
+                                    <p>Shop TodayΓÇÖs Deals <br><strong>Awesome Made Easy. HERO7 Black</strong></p>
                                 </div><!-- End .cta-text -->
                                 <a href="#" class="btn btn-primary btn-round"><span>Shop Now - $429.99</span><i class="icon-long-arrow-right"></i></a>
                             </div><!-- End .cta-content -->
@@ -1541,10 +1582,11 @@ require_once __DIR__ . '/../includes/navbar.php';
                 </div><!-- End .cta -->
             </div><!-- End .container -->
 
+            <?php if (false): ?>
             <div class="container">
                 <div class="heading text-center mb-3">
                     <h2 class="title">Deals & Outlet</h2><!-- End .title -->
-                    <p class="title-desc">Today’s deal and more</p><!-- End .title-desc -->
+                    <p class="title-desc">TodayΓÇÖs deal and more</p><!-- End .title-desc -->
                 </div><!-- End .heading -->
 
                 <div class="row">
@@ -1600,6 +1642,7 @@ require_once __DIR__ . '/../includes/navbar.php';
                     <a href="#" class="btn btn-outline-dark-2 btn-round btn-more"><span>Shop more Outlet deals</span><i class="icon-long-arrow-right"></i></a>
                 </div><!-- End .more-container -->
             </div><!-- End .container -->
+            <?php endif; ?>
 
             <div class="container">
                 <hr class="mb-0">
@@ -1654,6 +1697,7 @@ require_once __DIR__ . '/../includes/navbar.php';
             </div><!-- End .container -->
 
             <div class="bg-light pt-5 pb-6">
+                <?php if (false): ?>
                 <div class="container trending-products">
                     <div class="heading heading-flex mb-3">
                         <div class="heading-left">
@@ -2284,10 +2328,12 @@ require_once __DIR__ . '/../includes/navbar.php';
                         </div><!-- End .col-xl-4-5col -->
                     </div><!-- End .row -->
                 </div><!-- End .container -->
+                <?php endif; ?>
             </div><!-- End .bg-light pt-5 pb-6 -->
 
             <div class="mb-5"></div><!-- End .mb-5 -->
 
+            <?php if (false): ?>
             <div class="container for-you">
                 <div class="heading heading-flex mb-3">
                     <div class="heading-left">
@@ -2618,6 +2664,7 @@ require_once __DIR__ . '/../includes/navbar.php';
                     </div><!-- End .row -->
                 </div><!-- End .products -->
             </div><!-- End .container -->
+            <?php endif; ?>
 
             <div class="mb-4"></div><!-- End .mb-4 -->
 

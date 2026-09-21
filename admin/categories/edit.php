@@ -98,10 +98,13 @@ require_once __DIR__ . '/../../includes/admin-header.php';
                         <input type="text" class="form-control" name="slug" required value="<?= htmlspecialchars($_POST['slug'] ?? $category['slug']) ?>">
                     </div>
 
-                    <?php if (!empty($category['image'])): ?>
+                    <?php
+                    $currentImageFile = !empty($category['image']) ? basename($category['image']) : '';
+                    if ($currentImageFile !== '' && is_file(BASE_PATH . '/public/uploads/categories/' . $currentImageFile)):
+                    ?>
                         <div class="mb-3">
                             <label class="form-label text-xs text-secondary d-block">Current Image:</label>
-                            <img src="<?= APP_URL ?>/uploads/categories/<?= htmlspecialchars($category['image']) ?>" alt="Category Image" class="border-radius-lg" style="width: 80px; height: 80px; object-fit: cover;">
+                            <img src="<?= UPLOADS_URL ?>/categories/<?= rawurlencode($currentImageFile) ?>" alt="Category Image" class="border-radius-lg" style="width: 80px; height: 80px; object-fit: cover;">
                         </div>
                     <?php endif; ?>
 

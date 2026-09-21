@@ -1,0 +1,4 @@
+.env
+config/stripe.local.php
+config/cacert.pem
+

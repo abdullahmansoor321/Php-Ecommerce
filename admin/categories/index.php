@@ -52,8 +52,11 @@ $categories = $db->fetchAll("SELECT * FROM categories ORDER BY created_at DESC")
                                         <td>
                                             <div class="d-flex px-3 py-1">
                                                 <div>
-                                                    <?php if (!empty($cat['image'])): ?>
-                                                        <img src="<?= APP_URL ?>/uploads/categories/<?= htmlspecialchars($cat['image']) ?>" class="avatar avatar-sm me-3 border-radius-lg" alt="category image">
+                                                    <?php
+                                                    $catImageFile = !empty($cat['image']) ? basename($cat['image']) : '';
+                                                    if ($catImageFile !== '' && is_file(BASE_PATH . '/public/uploads/categories/' . $catImageFile)):
+                                                    ?>
+                                                        <img src="<?= UPLOADS_URL ?>/categories/<?= rawurlencode($catImageFile) ?>" class="avatar avatar-sm me-3 border-radius-lg" alt="category image">
                                                     <?php else: ?>
                                                         <div class="avatar avatar-sm me-3 bg-gradient-secondary border-radius-lg d-flex align-items-center justify-content-center text-white">
                                                             <i class="material-symbols-rounded text-sm">category</i>

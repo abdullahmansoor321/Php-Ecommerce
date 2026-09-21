@@ -148,10 +148,13 @@ require_once __DIR__ . '/../../includes/admin-header.php';
                         <textarea class="form-control" name="description" rows="4" placeholder="Product description..."><?= htmlspecialchars($_POST['description'] ?? $product['description']) ?></textarea>
                     </div>
 
-                    <?php if (!empty($product['image'])): ?>
+                    <?php
+                    $currentImageFile = !empty($product['image']) ? basename($product['image']) : '';
+                    if ($currentImageFile !== '' && is_file(BASE_PATH . '/public/uploads/products/' . $currentImageFile)):
+                    ?>
                         <div class="mb-3">
                             <label class="form-label text-xs text-secondary d-block">Current Image:</label>
-                            <img src="<?= APP_URL ?>/uploads/products/<?= htmlspecialchars($product['image']) ?>" alt="Product Image" class="border-radius-lg" style="width: 80px; height: 80px; object-fit: cover;">
+                            <img src="<?= UPLOADS_URL ?>/products/<?= rawurlencode($currentImageFile) ?>" alt="Product Image" class="border-radius-lg" style="width: 80px; height: 80px; object-fit: cover;">
                         </div>
                     <?php endif; ?>
 

@@ -1,7 +1,27 @@
 <?php
 require_once __DIR__ . '/../config/constants.php';
+require_once __DIR__ . '/../core/Database.php';
 
-$page_title = "MacBook Pro 13\" - Product Details";
+$productId = (int)($_GET['id'] ?? 0);
+$db = Database::getInstance();
+$product = $db->fetchOne(
+    "SELECT p.id, p.name, p.description, p.price, p.stock, p.image, c.name AS category_name, c.slug AS category_slug
+     FROM products p
+     INNER JOIN categories c ON c.id = p.category_id
+     WHERE p.id = ? AND p.status = 1 AND c.status = 1",
+    [$productId]
+);
+
+if (!$product) {
+    header('Location: ' . FRONT_URL . '/shop.php');
+    exit;
+}
+
+$placeholderImage = 'https://placehold.co/600x600?text=Product';
+$productImage = !empty($product['image']) && is_file(BASE_PATH . '/public/uploads/products/' . basename($product['image'])) ? UPLOADS_URL . '/products/' . rawurlencode(basename($product['image'])) : $placeholderImage;
+$page_title = htmlspecialchars($product['name']) . " - Product Details";
+$productDescription = !empty($product['description']) ? $product['description'] : 'Product details are currently unavailable.';
+$productStock = (int)$product['stock'];
 
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/navbar.php';
@@ -11,10 +31,10 @@ require_once __DIR__ . '/../includes/navbar.php';
     <nav aria-label="breadcrumb" class="breadcrumb-nav border-0 mb-0">
         <div class="container d-flex align-items-center">
             <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="<?= APP_URL ?>">Home</a></li>
-                <li class="breadcrumb-item"><a href="<?= APP_URL ?>/shop.php">Products</a></li>
-                <li class="breadcrumb-item"><a href="<?= APP_URL ?>/shop.php?cat=laptops">Laptops</a></li>
-                <li class="breadcrumb-item active" aria-current="page">MacBook Pro 13"</li>
+                <li class="breadcrumb-item"><a href="<?= FRONT_URL ?>/index.php">Home</a></li>
+                <li class="breadcrumb-item"><a href="<?= FRONT_URL ?>/shop.php">Products</a></li>
+                <li class="breadcrumb-item"><a href="<?= FRONT_URL ?>/shop.php?cat=<?= htmlspecialchars($product['category_slug']) ?>"><?= htmlspecialchars($product['category_name']) ?></a></li>
+                <li class="breadcrumb-item active" aria-current="page"><?= htmlspecialchars($product['name']) ?></li>
             </ol>
         </div>
     </nav>
@@ -29,10 +49,10 @@ require_once __DIR__ . '/../includes/navbar.php';
                         <div class="product-gallery product-gallery-vertical">
                             <div class="row">
                                 <figure class="product-main-image">
-                                    <img id="product-zoom" 
-                                         src="<?= FRONT_ASSETS ?>/images/demos/demo-4/products/product-1.jpg" 
-                                         data-zoom-image="<?= FRONT_ASSETS ?>/images/demos/demo-4/products/product-1.jpg" 
-                                         alt="MacBook Pro 13">
+                                     <img id="product-zoom" 
+                                         src="<?= htmlspecialchars($productImage) ?>" 
+                                         data-zoom-image="<?= htmlspecialchars($productImage) ?>" 
+                                         alt="<?= htmlspecialchars($product['name']) ?>">
 
                                     <a href="#" id="btn-product-gallery" class="btn-product-gallery">
                                         <i class="icon-arrows"></i>
@@ -40,22 +60,22 @@ require_once __DIR__ . '/../includes/navbar.php';
                                 </figure>
 
                                 <div id="product-zoom-gallery" class="product-image-gallery">
-                                    <a class="product-gallery-item active" href="#" 
-                                       data-image="<?= FRONT_ASSETS ?>/images/demos/demo-4/products/product-1.jpg" 
-                                       data-zoom-image="<?= FRONT_ASSETS ?>/images/demos/demo-4/products/product-1.jpg">
-                                        <img src="<?= FRONT_ASSETS ?>/images/demos/demo-4/products/product-1.jpg" alt="MacBook front">
+                                                <a class="product-gallery-item active" href="#" 
+                                                    data-image="<?= htmlspecialchars($productImage) ?>" 
+                                                    data-zoom-image="<?= htmlspecialchars($productImage) ?>">
+                                                     <img src="<?= htmlspecialchars($productImage) ?>" alt="<?= htmlspecialchars($product['name']) ?>">
                                     </a>
 
                                     <a class="product-gallery-item" href="#" 
-                                       data-image="<?= FRONT_ASSETS ?>/images/demos/demo-4/products/product-2.jpg" 
-                                       data-zoom-image="<?= FRONT_ASSETS ?>/images/demos/demo-4/products/product-2.jpg">
-                                        <img src="<?= FRONT_ASSETS ?>/images/demos/demo-4/products/product-2.jpg" alt="Audio accessory">
+                                                    data-image="<?= htmlspecialchars($productImage) ?>" 
+                                                    data-zoom-image="<?= htmlspecialchars($productImage) ?>">
+                                                     <img src="<?= htmlspecialchars($productImage) ?>" alt="<?= htmlspecialchars($product['name']) ?>">
                                     </a>
 
                                     <a class="product-gallery-item" href="#" 
-                                       data-image="<?= FRONT_ASSETS ?>/images/demos/demo-4/products/product-3.jpg" 
-                                       data-zoom-image="<?= FRONT_ASSETS ?>/images/demos/demo-4/products/product-3.jpg">
-                                        <img src="<?= FRONT_ASSETS ?>/images/demos/demo-4/products/product-3.jpg" alt="Display and keyboard">
+                                                    data-image="<?= htmlspecialchars($productImage) ?>" 
+                                                    data-zoom-image="<?= htmlspecialchars($productImage) ?>">
+                                                     <img src="<?= htmlspecialchars($productImage) ?>" alt="<?= htmlspecialchars($product['name']) ?>">
                                     </a>
                                 </div>
                             </div>
@@ -65,7 +85,7 @@ require_once __DIR__ . '/../includes/navbar.php';
                     <!-- Right: Product Information & Add to Cart -->
                     <div class="col-md-6">
                         <div class="product-details">
-                            <h1 class="product-title">Apple MacBook Pro 13" Display, Intel Core i5, 8GB RAM, 256GB SSD</h1>
+                            <h1 class="product-title"><?= htmlspecialchars($product['name']) ?></h1>
 
                             <div class="ratings-container">
                                 <div class="ratings">
@@ -74,20 +94,19 @@ require_once __DIR__ . '/../includes/navbar.php';
                                 <a class="ratings-text" href="#product-review-link" id="review-link">( 4 Reviews )</a>
                             </div>
 
-                            <!-- Dynamic Pricing -->
                             <div class="product-price">
-                                $1,199.99
+                                $<?= number_format((float)$product['price'], 2) ?>
                             </div>
 
                             <!-- Stock Availability Indicator (Required by Proposal) -->
                             <div class="product-stock-status mb-2">
                                 <span class="badge" style="font-size: 1.2rem; background-color: #28a745; color: white; padding: 6px 12px; border-radius: 4px;">
-                                    <i class="icon-check"></i> In Stock (12 units available)
+                                    <i class="icon-check"></i> <?= $productStock > 0 ? 'In Stock' : 'Out of Stock' ?> (<?= $productStock ?> units available)
                                 </span>
                             </div>
 
                             <div class="product-content">
-                                <p>Supercharged by quad-core 8th-generation Intel Core i5 processor. Features a brilliant Retina display with True Tone technology, backlit Magic Keyboard, Touch Bar with Touch ID, and ultra-fast SSD.</p>
+                                <p><?= htmlspecialchars($productDescription) ?></p>
                             </div>
 
                             <!-- Color Selection -->
@@ -112,13 +131,13 @@ require_once __DIR__ . '/../includes/navbar.php';
                             </div>
 
                             <!-- Quantity and Add to Cart Form -->
-                            <form action="<?= APP_URL ?>/cart.php" method="POST">
-                                <input type="hidden" name="product_id" value="1">
+                            <form action="<?= FRONT_URL ?>/cart.php?action=add" method="POST">
+                                <input type="hidden" name="product_id" value="<?= (int)$product['id'] ?>">
                                 
                                 <div class="details-filter-row details-row-size">
                                     <label for="qty">Qty:</label>
                                     <div class="product-details-quantity">
-                                        <input type="number" id="qty" name="quantity" class="form-control" value="1" min="1" max="12" step="1" data-decimals="0" required>
+                                        <input type="number" id="qty" name="quantity" class="form-control" value="1" min="1" max="<?= max(1, $productStock) ?>" step="1" data-decimals="0" required <?= $productStock < 1 ? 'disabled' : '' ?>>
                                     </div>
                                 </div>
 
@@ -136,8 +155,8 @@ require_once __DIR__ . '/../includes/navbar.php';
                             <div class="product-details-footer">
                                 <div class="product-cat">
                                     <span>Category:</span>
-                                    <a href="<?= APP_URL ?>/shop.php?cat=laptops">Laptops</a>,
-                                    <a href="<?= APP_URL ?>/shop.php?brand=apple">Apple</a>
+                                    <a href="<?= FRONT_URL ?>/shop.php?cat=<?= htmlspecialchars($product['category_slug']) ?>"><?= htmlspecialchars($product['category_name']) ?></a>,
+                                    <a href="<?= FRONT_URL ?>/shop.php?brand=apple">Apple</a>
                                 </div>
 
                                 <div class="social-icons social-icons-sm">
@@ -254,16 +273,16 @@ require_once __DIR__ . '/../includes/navbar.php';
                 
                 <div class="product product-7 text-center">
                     <figure class="product-media">
-                        <a href="<?= APP_URL ?>/product.php?id=2">
+                        <a href="<?= FRONT_URL ?>/product.php?id=2">
                             <img src="<?= FRONT_ASSETS ?>/images/demos/demo-4/products/product-2.jpg" alt="Bose speaker" class="product-image">
                         </a>
                         <div class="product-action">
-                            <a href="<?= APP_URL ?>/cart.php" class="btn-product btn-cart"><span>add to cart</span></a>
+                            <a href="<?= FRONT_URL ?>/cart.php" class="btn-product btn-cart"><span>add to cart</span></a>
                         </div>
                     </figure>
                     <div class="product-body">
-                        <div class="product-cat"><a href="<?= APP_URL ?>/shop.php?cat=audio">Audio</a></div>
-                        <h3 class="product-title"><a href="<?= APP_URL ?>/product.php?id=2">Bose - SoundLink Bluetooth Speaker</a></h3>
+                        <div class="product-cat"><a href="<?= FRONT_URL ?>/shop.php?cat=audio">Audio</a></div>
+                        <h3 class="product-title"><a href="<?= FRONT_URL ?>/product.php?id=2">Bose - SoundLink Bluetooth Speaker</a></h3>
                         <div class="product-price">$79.99</div>
                     </div>
                 </div>
@@ -271,16 +290,16 @@ require_once __DIR__ . '/../includes/navbar.php';
                 <div class="product product-7 text-center">
                     <figure class="product-media">
                         <span class="product-label label-new">New</span>
-                        <a href="<?= APP_URL ?>/product.php?id=3">
+                        <a href="<?= FRONT_URL ?>/product.php?id=3">
                             <img src="<?= FRONT_ASSETS ?>/images/demos/demo-4/products/product-3.jpg" alt="Apple iPad" class="product-image">
                         </a>
                         <div class="product-action">
-                            <a href="<?= APP_URL ?>/cart.php" class="btn-product btn-cart"><span>add to cart</span></a>
+                            <a href="<?= FRONT_URL ?>/cart.php" class="btn-product btn-cart"><span>add to cart</span></a>
                         </div>
                     </figure>
                     <div class="product-body">
-                        <div class="product-cat"><a href="<?= APP_URL ?>/shop.php?cat=tablets">Tablets</a></div>
-                        <h3 class="product-title"><a href="<?= APP_URL ?>/product.php?id=3">Apple - 11 Inch iPad Pro 256GB</a></h3>
+                        <div class="product-cat"><a href="<?= FRONT_URL ?>/shop.php?cat=smart-phones">Tablets</a></div>
+                        <h3 class="product-title"><a href="<?= FRONT_URL ?>/product.php?id=3">Apple - 11 Inch iPad Pro 256GB</a></h3>
                         <div class="product-price">$899.99</div>
                     </div>
                 </div>
@@ -288,32 +307,32 @@ require_once __DIR__ . '/../includes/navbar.php';
                 <div class="product product-7 text-center">
                     <figure class="product-media">
                         <span class="product-label label-sale">Sale</span>
-                        <a href="<?= APP_URL ?>/product.php?id=4">
+                        <a href="<?= FRONT_URL ?>/product.php?id=4">
                             <img src="<?= FRONT_ASSETS ?>/images/demos/demo-4/products/product-4.jpg" alt="Google Pixel" class="product-image">
                         </a>
                         <div class="product-action">
-                            <a href="<?= APP_URL ?>/cart.php" class="btn-product btn-cart"><span>add to cart</span></a>
+                            <a href="<?= FRONT_URL ?>/cart.php" class="btn-product btn-cart"><span>add to cart</span></a>
                         </div>
                     </figure>
                     <div class="product-body">
-                        <div class="product-cat"><a href="<?= APP_URL ?>/shop.php?cat=phones">Cell Phones</a></div>
-                        <h3 class="product-title"><a href="<?= APP_URL ?>/product.php?id=4">Google - Pixel 3 XL 128GB</a></h3>
+                        <div class="product-cat"><a href="<?= FRONT_URL ?>/shop.php?cat=smart-phones">Cell Phones</a></div>
+                        <h3 class="product-title"><a href="<?= FRONT_URL ?>/product.php?id=4">Google - Pixel 3 XL 128GB</a></h3>
                         <div class="product-price">$349.99</div>
                     </div>
                 </div>
 
                 <div class="product product-7 text-center">
                     <figure class="product-media">
-                        <a href="<?= APP_URL ?>/product.php?id=6">
+                        <a href="<?= FRONT_URL ?>/product.php?id=6">
                             <img src="<?= FRONT_ASSETS ?>/images/demos/demo-4/products/product-6.jpg" alt="Bose SoundSport" class="product-image">
                         </a>
                         <div class="product-action">
-                            <a href="<?= APP_URL ?>/cart.php" class="btn-product btn-cart"><span>add to cart</span></a>
+                            <a href="<?= FRONT_URL ?>/cart.php" class="btn-product btn-cart"><span>add to cart</span></a>
                         </div>
                     </figure>
                     <div class="product-body">
-                        <div class="product-cat"><a href="<?= APP_URL ?>/shop.php?cat=audio">Headphones</a></div>
-                        <h3 class="product-title"><a href="<?= APP_URL ?>/product.php?id=6">Bose - SoundSport Wireless</a></h3>
+                        <div class="product-cat"><a href="<?= FRONT_URL ?>/shop.php?cat=audio">Headphones</a></div>
+                        <h3 class="product-title"><a href="<?= FRONT_URL ?>/product.php?id=6">Bose - SoundSport Wireless</a></h3>
                         <div class="product-price">$199.99</div>
                     </div>
                 </div>

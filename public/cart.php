@@ -1,5 +1,45 @@
 <?php
 require_once __DIR__ . '/../config/constants.php';
+require_once __DIR__ . '/../core/Session.php';
+require_once __DIR__ . '/../core/Cart.php';
+
+Session::start();
+
+// Handle Cart Actions
+$action = $_GET['action'] ?? '';
+$productId = (int)($_GET['id'] ?? $_POST['product_id'] ?? 0);
+
+if ($action === 'add' && $productId > 0) {
+	$qty = max(1, (int)($_GET['qty'] ?? $_POST['qty'] ?? $_POST['quantity'] ?? 1));
+    Cart::add($productId, $qty);
+    header('Location: ' . FRONT_URL . '/cart.php');
+    exit;
+}
+
+if ($action === '' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_to_cart']) && $productId > 0) {
+	$qty = max(1, (int)($_POST['quantity'] ?? 1));
+	Cart::add($productId, $qty);
+	header('Location: ' . FRONT_URL . '/cart.php');
+	exit;
+}
+
+if ($action === 'remove' && $productId > 0) {
+    Cart::remove($productId);
+    header('Location: ' . FRONT_URL . '/cart.php');
+    exit;
+}
+
+if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $quantities = $_POST['qty'] ?? [];
+    foreach ($quantities as $prodId => $qty) {
+        Cart::update((int)$prodId, (int)$qty);
+    }
+    header('Location: ' . FRONT_URL . '/cart.php');
+    exit;
+}
+
+$cartItems = Cart::getItems();
+$cartTotal = Cart::getTotal();
 
 $page_title = "Shopping Cart - Molla eCommerce";
 
@@ -16,8 +56,8 @@ require_once __DIR__ . '/../includes/navbar.php';
             <nav aria-label="breadcrumb" class="breadcrumb-nav">
                 <div class="container">
                     <ol class="breadcrumb">
-                        <li class="breadcrumb-item"><a href="<?= APP_URL ?>">Home</a></li>
-                        <li class="breadcrumb-item"><a href="<?= APP_URL ?>/shop.php">Shop</a></li>
+                        <li class="breadcrumb-item"><a href="<?= FRONT_URL ?>/index.php">Home</a></li>
+                        <li class="breadcrumb-item"><a href="<?= FRONT_URL ?>/shop.php">Shop</a></li>
                         <li class="breadcrumb-item active" aria-current="page">Shopping Cart</li>
                     </ol>
                 </div><!-- End .container -->
@@ -26,151 +66,147 @@ require_once __DIR__ . '/../includes/navbar.php';
             <div class="page-content">
             	<div class="cart">
 	                <div class="container">
-	                	<div class="row">
-	                		<div class="col-lg-9">
-	                			<table class="table table-cart table-mobile">
-									<thead>
-										<tr>
-											<th>Product</th>
-											<th>Price</th>
-											<th>Quantity</th>
-											<th>Total</th>
-											<th></th>
-										</tr>
-									</thead>
+                        <form action="<?= FRONT_URL ?>/cart.php?action=update" method="POST">
+    	                	<div class="row">
+    	                		<div class="col-lg-9">
+    	                			<table class="table table-cart table-mobile">
+    									<thead>
+    										<tr>
+    											<th>Product</th>
+    											<th>Price</th>
+    											<th>Quantity</th>
+    											<th>Total</th>
+    											<th></th>
+    										</tr>
+    									</thead>
 
-									<tbody>
-										<!-- Item 1: MacBook Pro -->
-										<tr>
-											<td class="product-col">
-												<div class="product">
-													<figure class="product-media">
-														<a href="<?= APP_URL ?>/product.php?id=1">
-															<img src="<?= FRONT_ASSETS ?>/images/demos/demo-4/products/product-1.jpg" alt="MacBook Pro">
-														</a>
-													</figure>
+    									<tbody>
+                                            <?php if (empty($cartItems)): ?>
+                                                <tr>
+                                                    <td colspan="5" class="text-center py-5">
+                                                        <p class="mb-3">Your shopping cart is empty.</p>
+                                                        <a href="<?= FRONT_URL ?>/shop.php" class="btn btn-outline-primary-2"><span>GO TO SHOP</span><i class="icon-long-arrow-right"></i></a>
+                                                    </td>
+                                                </tr>
+                                            <?php else: ?>
+                                                <?php foreach ($cartItems as $item): ?>
+                                                    <?php 
+													$itemImg = basename((string)($item['image'] ?? ''));
+													$imgPath = $itemImg !== '' && is_file(BASE_PATH . '/public/uploads/products/' . $itemImg)
+														? UPLOADS_URL . '/products/' . rawurlencode($itemImg)
+														: 'https://placehold.co/120x120?text=Product';
+                                                    $itemSubtotal = (float)$item['price'] * (int)$item['quantity'];
+                                                    ?>
+                                                    <tr>
+                                                        <td class="product-col">
+                                                            <div class="product">
+                                                                <figure class="product-media">
+                                                                    <a href="<?= FRONT_URL ?>/product.php?id=<?= $item['product_id'] ?>">
+                                                                        <img src="<?= htmlspecialchars($imgPath) ?>" alt="<?= htmlspecialchars($item['name']) ?>">
+                                                                    </a>
+                                                                </figure>
 
-													<h3 class="product-title">
-														<a href="<?= APP_URL ?>/product.php?id=1">MacBook Pro 13" Display, i5, 8GB, 256GB SSD</a>
-													</h3><!-- End .product-title -->
-												</div><!-- End .product -->
-											</td>
-											<td class="price-col">$1,199.99</td>
-											<td class="quantity-col">
-                                                <div class="cart-product-quantity">
-                                                    <input type="number" class="form-control" value="1" min="1" max="10" step="1" data-decimals="0" required>
-                                                </div><!-- End .cart-product-quantity -->
-                                            </td>
-											<td class="total-col">$1,199.99</td>
-											<td class="remove-col"><button class="btn-remove"><i class="icon-close"></i></button></td>
-										</tr>
+                                                                <h3 class="product-title">
+                                                                    <a href="<?= FRONT_URL ?>/product.php?id=<?= $item['product_id'] ?>"><?= htmlspecialchars($item['name']) ?></a>
+                                                                </h3><!-- End .product-title -->
+                                                            </div><!-- End .product -->
+                                                        </td>
+                                                        <td class="price-col">$<?= number_format((float)$item['price'], 2) ?></td>
+                                                        <td class="quantity-col">
+                                                            <div class="cart-product-quantity">
+                                                                <input type="number" class="form-control" name="qty[<?= $item['product_id'] ?>]" value="<?= (int)$item['quantity'] ?>" min="1" max="<?= max(1, (int)$item['stock']) ?>" step="1" data-decimals="0" required>
+                                                            </div><!-- End .cart-product-quantity -->
+                                                        </td>
+                                                        <td class="total-col">$<?= number_format($itemSubtotal, 2) ?></td>
+                                                        <td class="remove-col">
+                                                            <a href="<?= FRONT_URL ?>/cart.php?action=remove&id=<?= $item['product_id'] ?>" class="btn-remove" title="Remove Product"><i class="icon-close"></i></a>
+                                                        </td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
+    									</tbody>
+    								</table><!-- End .table table-wishlist -->
 
-										<!-- Item 2: Bose Speaker -->
-										<tr>
-											<td class="product-col">
-												<div class="product">
-													<figure class="product-media">
-														<a href="<?= APP_URL ?>/product.php?id=2">
-															<img src="<?= FRONT_ASSETS ?>/images/demos/demo-4/products/product-2.jpg" alt="Bose Speaker">
-														</a>
-													</figure>
+                                    <?php if (!empty($cartItems)): ?>
+    	                			<div class="cart-bottom">
+    			            			<div class="cart-discount">
+    			            				<div class="input-group">
+    				        					<input type="text" class="form-control" placeholder="coupon code">
+    				        					<div class="input-group-append">
+    												<button class="btn btn-outline-primary-2" type="button"><i class="icon-long-arrow-right"></i></button>
+    											</div><!-- .End .input-group-append -->
+    			        					</div><!-- End .input-group -->
+    			            			</div><!-- End .cart-discount -->
 
-													<h3 class="product-title">
-														<a href="<?= APP_URL ?>/product.php?id=2">Bose - SoundLink Bluetooth Speaker</a>
-													</h3><!-- End .product-title -->
-												</div><!-- End .product -->
-											</td>
-											<td class="price-col">$79.99</td>
-											<td class="quantity-col">
-                                                <div class="cart-product-quantity">
-                                                    <input type="number" class="form-control" value="1" min="1" max="10" step="1" data-decimals="0" required>
-                                                </div><!-- End .cart-product-quantity -->                                 
-                                            </td>
-											<td class="total-col">$79.99</td>
-											<td class="remove-col"><button class="btn-remove"><i class="icon-close"></i></button></td>
-										</tr>
-									</tbody>
-								</table><!-- End .table table-wishlist -->
+    			            			<button type="submit" class="btn btn-outline-dark-2"><span>UPDATE CART</span><i class="icon-refresh"></i></button>
+    		            			</div><!-- End .cart-bottom -->
+                                    <?php endif; ?>
+    	                		</div><!-- End .col-lg-9 -->
 
-	                			<div class="cart-bottom">
-			            			<div class="cart-discount">
-			            				<form action="#">
-			            					<div class="input-group">
-				        						<input type="text" class="form-control" required placeholder="coupon code">
-				        						<div class="input-group-append">
-													<button class="btn btn-outline-primary-2" type="submit"><i class="icon-long-arrow-right"></i></button>
-												</div><!-- .End .input-group-append -->
-			        						</div><!-- End .input-group -->
-			            				</form>
-			            			</div><!-- End .cart-discount -->
+    	                		<aside class="col-lg-3">
+    	                			<div class="summary summary-cart">
+    	                				<h3 class="summary-title">Cart Total</h3><!-- End .summary-title -->
 
-			            			<a href="<?= APP_URL ?>/cart.php" class="btn btn-outline-dark-2"><span>UPDATE CART</span><i class="icon-refresh"></i></a>
-		            			</div><!-- End .cart-bottom -->
-	                		</div><!-- End .col-lg-9 -->
+    	                				<table class="table table-summary">
+    	                					<tbody>
+    	                						<tr class="summary-subtotal">
+    	                							<td>Subtotal:</td>
+    	                							<td>$<?= number_format($cartTotal, 2) ?></td>
+    	                						</tr><!-- End .summary-subtotal -->
+    	                						<tr class="summary-shipping">
+    	                							<td>Shipping:</td>
+    	                							<td>&nbsp;</td>
+    	                						</tr>
 
-	                		<aside class="col-lg-3">
-	                			<div class="summary summary-cart">
-	                				<h3 class="summary-title">Cart Total</h3><!-- End .summary-title -->
+    	                						<tr class="summary-shipping-row">
+    	                							<td>
+    													<div class="custom-control custom-radio">
+    														<input type="radio" id="free-shipping" name="shipping" class="custom-control-input" checked>
+    														<label class="custom-control-label" for="free-shipping">Free Shipping</label>
+    													</div><!-- End .custom-control -->
+    	                							</td>
+    	                							<td>$0.00</td>
+    	                						</tr><!-- End .summary-shipping-row -->
 
-	                				<table class="table table-summary">
-	                					<tbody>
-	                						<tr class="summary-subtotal">
-	                							<td>Subtotal:</td>
-	                							<td>$1,279.98</td>
-	                						</tr><!-- End .summary-subtotal -->
-	                						<tr class="summary-shipping">
-	                							<td>Shipping:</td>
-	                							<td>&nbsp;</td>
-	                						</tr>
+    	                						<tr class="summary-shipping-row">
+    	                							<td>
+    	                								<div class="custom-control custom-radio">
+    														<input type="radio" id="standart-shipping" name="shipping" class="custom-control-input">
+    														<label class="custom-control-label" for="standart-shipping">Standard:</label>
+    													</div><!-- End .custom-control -->
+    	                							</td>
+    	                							<td>$10.00</td>
+    	                						</tr><!-- End .summary-shipping-row -->
 
-	                						<tr class="summary-shipping-row">
-	                							<td>
-													<div class="custom-control custom-radio">
-														<input type="radio" id="free-shipping" name="shipping" class="custom-control-input" checked>
-														<label class="custom-control-label" for="free-shipping">Free Shipping</label>
-													</div><!-- End .custom-control -->
-	                							</td>
-	                							<td>$0.00</td>
-	                						</tr><!-- End .summary-shipping-row -->
+    	                						<tr class="summary-shipping-row">
+    	                							<td>
+    	                								<div class="custom-control custom-radio">
+    														<input type="radio" id="express-shipping" name="shipping" class="custom-control-input">
+    														<label class="custom-control-label" for="express-shipping">Express Courier:</label>
+    													</div><!-- End .custom-control -->
+    	                							</td>
+    	                							<td>$20.00</td>
+    	                						</tr><!-- End .summary-shipping-row -->
 
-	                						<tr class="summary-shipping-row">
-	                							<td>
-	                								<div class="custom-control custom-radio">
-														<input type="radio" id="standart-shipping" name="shipping" class="custom-control-input">
-														<label class="custom-control-label" for="standart-shipping">Standard:</label>
-													</div><!-- End .custom-control -->
-	                							</td>
-	                							<td>$10.00</td>
-	                						</tr><!-- End .summary-shipping-row -->
+    	                						<tr class="summary-shipping-estimate">
+    	                							<td>Estimate for Your Country<br> <a href="<?= FRONT_URL ?>/checkout.php">Change address</a></td>
+    	                							<td>&nbsp;</td>
+    	                						</tr><!-- End .summary-shipping-estimate -->
 
-	                						<tr class="summary-shipping-row">
-	                							<td>
-	                								<div class="custom-control custom-radio">
-														<input type="radio" id="express-shipping" name="shipping" class="custom-control-input">
-														<label class="custom-control-label" for="express-shipping">Express Courier:</label>
-													</div><!-- End .custom-control -->
-	                							</td>
-	                							<td>$20.00</td>
-	                						</tr><!-- End .summary-shipping-row -->
+    	                						<tr class="summary-total">
+    	                							<td>Total:</td>
+    	                							<td>$<?= number_format($cartTotal, 2) ?></td>
+    	                						</tr><!-- End .summary-total -->
+    	                					</tbody>
+    	                				</table><!-- End .table table-summary -->
 
-	                						<tr class="summary-shipping-estimate">
-	                							<td>Estimate for Your Country<br> <a href="#">Change address</a></td>
-	                							<td>&nbsp;</td>
-	                						</tr><!-- End .summary-shipping-estimate -->
+    	                				<a href="<?= FRONT_URL ?>/checkout.php" class="btn btn-outline-primary-2 btn-order btn-block">PROCEED TO CHECKOUT</a>
+    	                			</div><!-- End .summary -->
 
-	                						<tr class="summary-total">
-	                							<td>Total:</td>
-	                							<td>$1,279.98</td>
-	                						</tr><!-- End .summary-total -->
-	                					</tbody>
-	                				</table><!-- End .table table-summary -->
-
-	                				<a href="<?= APP_URL ?>/checkout.php" class="btn btn-outline-primary-2 btn-order btn-block">PROCEED TO CHECKOUT</a>
-	                			</div><!-- End .summary -->
-
-		            			<a href="<?= APP_URL ?>/shop.php" class="btn btn-outline-dark-2 btn-block mb-3"><span>CONTINUE SHOPPING</span><i class="icon-refresh"></i></a>
-	                		</aside><!-- End .col-lg-3 -->
-	                	</div><!-- End .row -->
+    		            			<a href="<?= FRONT_URL ?>/shop.php" class="btn btn-outline-dark-2 btn-block mb-3"><span>CONTINUE SHOPPING</span><i class="icon-refresh"></i></a>
+    	                		</aside><!-- End .col-lg-3 -->
+    	                	</div><!-- End .row -->
+                        </form>
 	                </div><!-- End .container -->
                 </div><!-- End .cart -->
             </div><!-- End .page-content -->

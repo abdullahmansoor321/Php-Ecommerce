@@ -60,8 +60,11 @@ $products = $db->fetchAll("
                                         <td>
                                             <div class="d-flex px-3 py-1 align-items-center">
                                                 <div>
-                                                    <?php if (!empty($prod['image'])): ?>
-                                                        <img src="<?= APP_URL ?>/uploads/products/<?= htmlspecialchars($prod['image']) ?>" class="avatar avatar-sm me-3 border-radius-lg" alt="product image" style="object-fit: cover;">
+                                                    <?php
+                                                    $prodImageFile = !empty($prod['image']) ? basename($prod['image']) : '';
+                                                    if ($prodImageFile !== '' && is_file(BASE_PATH . '/public/uploads/products/' . $prodImageFile)):
+                                                    ?>
+                                                        <img src="<?= UPLOADS_URL ?>/products/<?= rawurlencode($prodImageFile) ?>" class="avatar avatar-sm me-3 border-radius-lg" alt="product image" style="object-fit: cover;">
                                                     <?php else: ?>
                                                         <div class="avatar avatar-sm me-3 bg-gradient-secondary border-radius-lg d-flex align-items-center justify-content-center text-white">
                                                             <i class="material-symbols-rounded text-sm">inventory_2</i>

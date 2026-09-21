@@ -14,7 +14,7 @@ Payment Gateways:
 
 Cash on Delivery (**COD**)
 
-PayPal Sandbox integration
+Stripe test-mode integration
 
 Customer Authentication: Secure sign-up, login, and session persistence.
 
@@ -60,7 +60,7 @@ ecommerce-project/
 │
 ├── config/
 │   ├── database.php          
-│   └── paypal.php            # PayPal credentials & sandbox endpoints
+│   └── stripe.php            # Stripe server configuration
 │
 ├── core/
 │   ├── Auth.php              # Login, registration, role checks
@@ -170,10 +170,10 @@ Master order record with payment state.
     user_id **INT** **UNSIGNED** **NOT** **NULL**,
     order_number **VARCHAR**(50) **NOT** **NULL** **UNIQUE**,
     total_amount **DECIMAL**(10, 2) **NOT** **NULL**,
-    payment_method **ENUM**('cod', 'paypal') **NOT** **NULL**,
+    payment_method **ENUM**('cod', 'paypal', 'stripe') **NOT** **NULL**,
     payment_status **ENUM**('pending', 'completed', 'failed') **DEFAULT** 'pending',
     order_status **ENUM**('processing', 'shipped', 'delivered', 'cancelled') **DEFAULT** 'processing',
-    transaction_id **VARCHAR**(**100**) **NULL**, -- Stores PayPal capture/order ID    shipping_address **TEXT** **NOT** **NULL**,
+    transaction_id **VARCHAR**(**100**) **NULL**, -- Stores the verified payment provider transaction ID    shipping_address **TEXT** **NOT** **NULL**,
     created_at **TIMESTAMP** **DEFAULT** CURRENT_TIMESTAMP,
     **FOREIGN** **KEY** (user_id) **REFERENCES** users(id) ON **DELETE** **CASCADE**
 ) **ENGINE**=InnoDB;
@@ -201,7 +201,7 @@ Role checks ($_SESSION['user_role'] === 'admin') on every admin page with automa
 session_regenerate_id(true) upon successful authentication to guard against session fixation.
 Payment Flow:
 **COD**: Insert directly into orders with payment_status = 'pending'.
-PayPal: Load the PayPal JS **SDK** via sandbox credentials, capture order details on approval, and insert into the database with the PayPal Capture ID.
+Stripe: Create a hosted Checkout Session in test mode, verify the paid session server-side, and insert the verified PaymentIntent ID into the order.
 Reports Logic:
 Weekly: **SELECT** **DATE**(created_at) as day, **SUM**(total_amount) as sales **FROM** orders **WHERE** created_at >= **NOW**() - **INTERVAL** 7 **DAY** **GROUP** BY day
 Monthly: **SELECT** **MONTHNAME**(created_at) as month, **SUM**(total_amount) as sales **FROM** orders **WHERE** **YEAR**(created_at) = **YEAR**(**CURDATE**()) **GROUP** BY **MONTH**(created_at)
@@ -254,7 +254,7 @@ Database creation query :
     `user_id` **INT** **UNSIGNED** **NOT** **NULL**,
     `order_number` **VARCHAR**(50) **NOT** **NULL** **UNIQUE**,
     `total_amount` **DECIMAL**(10, 2) **NOT** **NULL**,
-    `payment_method` **ENUM**('cod', 'paypal') **NOT** **NULL**,
+    `payment_method` **ENUM**('cod', 'paypal', 'stripe') **NOT** **NULL**,
     `payment_status` **ENUM**('pending', 'completed', 'failed') **DEFAULT** 'pending',
     `order_status` **ENUM**('processing', 'shipped', 'delivered', 'cancelled') **DEFAULT** 'processing',
     `transaction_id` **VARCHAR**(**100**) **NULL**,
