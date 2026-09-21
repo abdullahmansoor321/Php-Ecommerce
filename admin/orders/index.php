@@ -7,12 +7,22 @@ $page_title = "Manage Orders";
 require_once __DIR__ . '/../../includes/admin-header.php';
 
 $db = Database::getInstance();
+
+// Pagination setup
+$perPage = 10;
+$page = max(1, (int)($_GET['page'] ?? 1));
+$totalRows = (int)($db->fetchOne("SELECT COUNT(*) as c FROM orders")['c'] ?? 0);
+$totalPages = max(1, (int)ceil($totalRows / $perPage));
+$page = min($page, $totalPages);
+$offset = ($page - 1) * $perPage;
+
 $orders = $db->fetchAll("
     SELECT o.*, u.name as customer_name, u.email as customer_email 
     FROM orders o 
     JOIN users u ON o.user_id = u.id 
     ORDER BY o.created_at DESC
-");
+    LIMIT ? OFFSET ?
+", [$perPage, $offset]);
 ?>
 
 <div class="row">
@@ -99,6 +109,8 @@ $orders = $db->fetchAll("
                         </tbody>
                     </table>
                 </div>
+
+                <?php require __DIR__ . '/../../includes/admin-pagination.php'; ?>
             </div>
         </div>
     </div>

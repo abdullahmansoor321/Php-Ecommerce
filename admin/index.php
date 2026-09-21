@@ -13,6 +13,18 @@ $totalCategories = $db->fetchOne("SELECT COUNT(*) as count FROM categories")['co
 $totalOrders = $db->fetchOne("SELECT COUNT(*) as count FROM orders")['count'] ?? 0;
 $totalRevenue = $db->fetchOne("SELECT SUM(total_amount) as total FROM orders WHERE payment_status = 'completed'")['total'] ?? 0.00;
 
+// Real comparative stats
+$todayRevenue = (float)($db->fetchOne("SELECT SUM(total_amount) as t FROM orders WHERE payment_status = 'completed' AND DATE(created_at) = CURDATE()")['t'] ?? 0);
+$yesterdayRevenue = (float)($db->fetchOne("SELECT SUM(total_amount) as t FROM orders WHERE payment_status = 'completed' AND DATE(created_at) = CURDATE() - INTERVAL 1 DAY")['t'] ?? 0);
+if ($yesterdayRevenue > 0) {
+    $revenueDelta = (int)round(($todayRevenue - $yesterdayRevenue) / $yesterdayRevenue * 100);
+} else {
+    $revenueDelta = $todayRevenue > 0 ? 100 : 0;
+}
+$activeFulfillments = (int)($db->fetchOne("SELECT COUNT(*) as c FROM orders WHERE order_status IN ('processing', 'shipped')")['c'] ?? 0);
+$lowStock = (int)($db->fetchOne("SELECT COUNT(*) as c FROM products WHERE stock <= 5")['c'] ?? 0);
+$activeCategories = (int)($db->fetchOne("SELECT COUNT(*) as c FROM categories WHERE status = 1")['c'] ?? 0);
+
 // Fetch recent orders
 $recentOrders = $db->fetchAll("SELECT o.*, u.name as customer_name FROM orders o JOIN users u ON o.user_id = u.id ORDER BY o.created_at DESC LIMIT 5");
 ?>
@@ -34,7 +46,7 @@ $recentOrders = $db->fetchAll("SELECT o.*, u.name as customer_name FROM orders o
             </div>
             <hr class="dark horizontal my-0">
             <div class="card-footer p-2 ps-3">
-                <p class="mb-0 text-sm"><span class="text-success font-weight-bolder">+5% </span>than yesterday</p>
+                <p class="mb-0 text-sm"><span class="text-<?= $revenueDelta >= 0 ? 'success' : 'danger' ?> font-weight-bolder"><?= ($revenueDelta >= 0 ? '+' : '') . $revenueDelta ?>% </span>than yesterday ($<?= number_format($todayRevenue, 2) ?> today)</p>
             </div>
         </div>
     </div>
@@ -55,7 +67,7 @@ $recentOrders = $db->fetchAll("SELECT o.*, u.name as customer_name FROM orders o
             </div>
             <hr class="dark horizontal my-0">
             <div class="card-footer p-2 ps-3">
-                <p class="mb-0 text-sm"><span class="text-success font-weight-bolder">Active </span>fulfillments</p>
+                <p class="mb-0 text-sm"><span class="text-success font-weight-bolder"><?= $activeFulfillments ?> </span>active fulfillments</p>
             </div>
         </div>
     </div>
@@ -76,7 +88,7 @@ $recentOrders = $db->fetchAll("SELECT o.*, u.name as customer_name FROM orders o
             </div>
             <hr class="dark horizontal my-0">
             <div class="card-footer p-2 ps-3">
-                <p class="mb-0 text-sm">Across <?= $totalCategories ?> categories</p>
+                <p class="mb-0 text-sm"><span class="text-<?= $lowStock > 0 ? 'danger' : 'success' ?> font-weight-bolder"><?= $lowStock ?> </span>low on stock (&le;5 units)</p>
             </div>
         </div>
     </div>
@@ -97,7 +109,7 @@ $recentOrders = $db->fetchAll("SELECT o.*, u.name as customer_name FROM orders o
             </div>
             <hr class="dark horizontal my-0">
             <div class="card-footer p-2 ps-3">
-                <p class="mb-0 text-sm">Navigation groupings</p>
+                <p class="mb-0 text-sm"><span class="text-success font-weight-bolder"><?= $activeCategories ?> </span>active right now</p>
             </div>
         </div>
     </div>

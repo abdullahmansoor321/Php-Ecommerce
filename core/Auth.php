@@ -63,6 +63,20 @@ class Auth
     }
 
     /**
+     * Re-validate against the DB that the logged-in account is still active.
+     * Closes the gap where a deactivated user keeps a working session.
+     */
+    public static function isActiveAccount(): bool
+    {
+        if (!self::check()) {
+            return false;
+        }
+        $db = Database::getInstance();
+        $row = $db->fetchOne("SELECT is_active FROM users WHERE id = ?", [$_SESSION['user_id']]);
+        return $row !== null && (int)$row['is_active'] === 1;
+    }
+
+    /**
      * Check if logged in user is admin
      */
     public static function isAdmin(): bool
@@ -76,7 +90,11 @@ class Auth
      */
     public static function requireAdmin(): void
     {
-        if (!self::isAdmin()) {
+        if (!self::isAdmin() || !self::isActiveAccount()) {
+            if (self::check()) {
+                // Account was deactivated mid-session: kill the session
+                self::logout();
+            }
             Session::setFlash('error', 'Unauthorized access. Admin privileges required.');
             header('Location: ' . APP_URL . '/admin/login.php');
             exit;

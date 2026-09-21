@@ -7,7 +7,16 @@ $page_title = "Manage Categories";
 require_once __DIR__ . '/../../includes/admin-header.php';
 
 $db = Database::getInstance();
-$categories = $db->fetchAll("SELECT * FROM categories ORDER BY created_at DESC");
+
+// Pagination setup
+$perPage = 10;
+$page = max(1, (int)($_GET['page'] ?? 1));
+$totalRows = (int)($db->fetchOne("SELECT COUNT(*) as c FROM categories")['c'] ?? 0);
+$totalPages = max(1, (int)ceil($totalRows / $perPage));
+$page = min($page, $totalPages);
+$offset = ($page - 1) * $perPage;
+
+$categories = $db->fetchAll("SELECT * FROM categories ORDER BY created_at DESC LIMIT ? OFFSET ?", [$perPage, $offset]);
 ?>
 
 <div class="row">
@@ -91,6 +100,8 @@ $categories = $db->fetchAll("SELECT * FROM categories ORDER BY created_at DESC")
                         </tbody>
                     </table>
                 </div>
+
+                <?php require __DIR__ . '/../../includes/admin-pagination.php'; ?>
             </div>
         </div>
     </div>

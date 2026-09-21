@@ -25,15 +25,36 @@ if (!$order) {
 
 // Handle status update
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $orderStatus = trim($_POST['order_status'] ?? 'processing');
-    $paymentStatus = trim($_POST['payment_status'] ?? 'pending');
+    $allowedOrderStatuses = ['processing', 'shipped', 'delivered', 'cancelled'];
+    $allowedPaymentStatuses = ['pending', 'completed', 'failed'];
 
-    $db->query(
-        "UPDATE orders SET order_status = ?, payment_status = ? WHERE id = ?",
-        [$orderStatus, $paymentStatus, $id]
-    );
+    $orderStatus = trim($_POST['order_status'] ?? '');
+    $paymentStatus = trim($_POST['payment_status'] ?? '');
 
-    Session::setFlash('success', 'Order status updated successfully!');
+    if (!in_array($orderStatus, $allowedOrderStatuses, true) || !in_array($paymentStatus, $allowedPaymentStatuses, true)) {
+        Session::setFlash('error', 'Invalid order or payment status value submitted.');
+        header('Location: ' . APP_URL . '/admin/orders/detail.php?id=' . $id);
+        exit;
+    }
+
+    $conn = $db->getConnection();
+    $conn->begin_transaction();
+
+    try {
+        // Stock restock/re-deduct on cancel transitions is handled by
+        // DB trigger trg_restock_on_cancel (fires on this UPDATE).
+        $db->query(
+            "UPDATE orders SET order_status = ?, payment_status = ? WHERE id = ?",
+            [$orderStatus, $paymentStatus, $id]
+        );
+
+        $conn->commit();
+        Session::setFlash('success', 'Order status updated successfully!' . ($orderStatus === 'cancelled' ? ' Items restocked to inventory.' : ''));
+    } catch (mysqli_sql_exception $e) {
+        $conn->rollback();
+        Session::setFlash('error', 'Failed to update order status. Please try again.');
+    }
+
     header('Location: ' . APP_URL . '/admin/orders/detail.php?id=' . $id);
     exit;
 }
@@ -62,6 +83,9 @@ require_once __DIR__ . '/../../includes/admin-header.php';
             <div class="card-body px-4 pb-4">
                 <?php if ($success = Session::getFlash('success')): ?>
                     <div class="alert alert-success text-white mb-4" role="alert"><?= htmlspecialchars($success) ?></div>
+                <?php endif; ?>
+                <?php if ($error = Session::getFlash('error')): ?>
+                    <div class="alert alert-danger text-white mb-4" role="alert"><?= htmlspecialchars($error) ?></div>
                 <?php endif; ?>
 
                 <div class="row mb-4">
@@ -125,8 +149,11 @@ require_once __DIR__ . '/../../includes/admin-header.php';
                                     <td>
                                         <div class="d-flex px-3 py-1 align-items-center">
                                             <div>
-                                                <?php if (!empty($item['product_image'])): ?>
-                                                    <img src="<?= APP_URL ?>/uploads/products/<?= htmlspecialchars($item['product_image']) ?>" class="avatar avatar-sm me-3 border-radius-lg" alt="product image" style="object-fit: cover;">
+                                                <?php
+                                                $itemImageFile = !empty($item['product_image']) ? basename($item['product_image']) : '';
+                                                if ($itemImageFile !== '' && is_file(BASE_PATH . '/public/uploads/products/' . $itemImageFile)):
+                                                ?>
+                                                    <img src="<?= UPLOADS_URL ?>/products/<?= rawurlencode($itemImageFile) ?>" class="avatar avatar-sm me-3 border-radius-lg" alt="product image" style="object-fit: cover;">
                                                 <?php endif; ?>
                                             </div>
                                             <h6 class="mb-0 text-sm"><?= htmlspecialchars($item['product_name']) ?></h6>

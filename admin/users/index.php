@@ -7,7 +7,16 @@ $page_title = "Manage Users";
 require_once __DIR__ . '/../../includes/admin-header.php';
 
 $db = Database::getInstance();
-$users = $db->fetchAll("SELECT id, name, email, role, is_active, created_at FROM users ORDER BY created_at DESC");
+
+// Pagination setup
+$perPage = 10;
+$page = max(1, (int)($_GET['page'] ?? 1));
+$totalRows = (int)($db->fetchOne("SELECT COUNT(*) as c FROM users")['c'] ?? 0);
+$totalPages = max(1, (int)ceil($totalRows / $perPage));
+$page = min($page, $totalPages);
+$offset = ($page - 1) * $perPage;
+
+$users = $db->fetchAll("SELECT id, name, email, role, is_active, created_at FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?", [$perPage, $offset]);
 ?>
 
 <div class="row">
@@ -85,6 +94,8 @@ $users = $db->fetchAll("SELECT id, name, email, role, is_active, created_at FROM
                         </tbody>
                     </table>
                 </div>
+
+                <?php require __DIR__ . '/../../includes/admin-pagination.php'; ?>
             </div>
         </div>
     </div>

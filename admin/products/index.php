@@ -8,13 +8,22 @@ require_once __DIR__ . '/../../includes/admin-header.php';
 
 $db = Database::getInstance();
 
+// Pagination setup
+$perPage = 10;
+$page = max(1, (int)($_GET['page'] ?? 1));
+$totalRows = (int)($db->fetchOne("SELECT COUNT(*) as c FROM products")['c'] ?? 0);
+$totalPages = max(1, (int)ceil($totalRows / $perPage));
+$page = min($page, $totalPages);
+$offset = ($page - 1) * $perPage;
+
 // Fetch products with their category names
 $products = $db->fetchAll("
     SELECT p.*, c.name as category_name 
     FROM products p 
     JOIN categories c ON p.category_id = c.id 
     ORDER BY p.created_at DESC
-");
+    LIMIT ? OFFSET ?
+", [$perPage, $offset]);
 ?>
 
 <div class="row">
@@ -107,6 +116,8 @@ $products = $db->fetchAll("
                         </tbody>
                     </table>
                 </div>
+
+                <?php require __DIR__ . '/../../includes/admin-pagination.php'; ?>
             </div>
         </div>
     </div>

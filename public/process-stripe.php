@@ -8,7 +8,7 @@ require_once __DIR__ . '/../core/Stripe.php';
 
 Session::start();
 
-if (!Auth::check() || Auth::isAdmin()) {
+if (!Auth::check() || Auth::isAdmin() || !Auth::isActiveAccount()) {
     Session::setFlash('error', 'Please sign in as a customer to complete payment.');
     header('Location: ' . FRONT_URL . '/login.php');
     exit;
@@ -75,15 +75,8 @@ try {
             $unitPrice = (float)$item['price'];
             $subtotal = $unitPrice * $quantity;
 
-            $stockStatement = $mysqli->prepare('UPDATE products SET stock = stock - ? WHERE id = ? AND status = 1 AND stock >= ?');
-            $stockStatement->bind_param('iii', $quantity, $productId, $quantity);
-            $stockStatement->execute();
-            if ($stockStatement->affected_rows !== 1) {
-                $stockStatement->close();
-                throw new RuntimeException('A product no longer has enough stock.');
-            }
-            $stockStatement->close();
-
+            // Stock is deducted by DB trigger trg_deduct_stock_on_item on the INSERT below.
+            // If stock is insufficient the trigger raises an error -> caught below -> rollback.
             $itemStatement = $mysqli->prepare(
                 'INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal) VALUES (?, ?, ?, ?, ?)'
             );

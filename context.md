@@ -157,7 +157,7 @@ Product catalog with stock tracking.
     status **TINYINT**(1) **DEFAULT** 1,
     created_at **TIMESTAMP** **DEFAULT** CURRENT_TIMESTAMP,
     updated_at **TIMESTAMP** **DEFAULT** CURRENT_TIMESTAMP ON **UPDATE** CURRENT_TIMESTAMP,
-    **FOREIGN** **KEY** (category_id) **REFERENCES** categories(id) ON **DELETE** **CASCADE**
+    **FOREIGN** **KEY** (category_id) **REFERENCES** categories(id) ON **DELETE** **RESTRICT**
 ) **ENGINE**=InnoDB;
  
 4. orders
@@ -175,7 +175,7 @@ Master order record with payment state.
     order_status **ENUM**('processing', 'shipped', 'delivered', 'cancelled') **DEFAULT** 'processing',
     transaction_id **VARCHAR**(**100**) **NULL**, -- Stores the verified payment provider transaction ID    shipping_address **TEXT** **NOT** **NULL**,
     created_at **TIMESTAMP** **DEFAULT** CURRENT_TIMESTAMP,
-    **FOREIGN** **KEY** (user_id) **REFERENCES** users(id) ON **DELETE** **CASCADE**
+    **FOREIGN** **KEY** (user_id) **REFERENCES** users(id) ON **DELETE** **RESTRICT**
 ) **ENGINE**=InnoDB;
  
 5. order_items
@@ -246,7 +246,7 @@ Database creation query :
     `created_at` **TIMESTAMP** **DEFAULT** CURRENT_TIMESTAMP,
     `updated_at` **TIMESTAMP** **DEFAULT** CURRENT_TIMESTAMP ON **UPDATE** CURRENT_TIMESTAMP,
     **CONSTRAINT** `fk_products_category` **FOREIGN** **KEY** (`category_id`) 
-    **REFERENCES** `categories` (`id`) ON **DELETE** **CASCADE**
+    **REFERENCES** `categories` (`id`) ON **DELETE** **RESTRICT**
 ) **ENGINE**=InnoDB;
 
 **CREATE** **TABLE** `orders` (
@@ -261,7 +261,7 @@ Database creation query :
     `shipping_address` **TEXT** **NOT** **NULL**,
     `created_at` **TIMESTAMP** **DEFAULT** CURRENT_TIMESTAMP,
     **CONSTRAINT** `fk_orders_user` **FOREIGN** **KEY** (`user_id`) 
-    **REFERENCES** `users` (`id`) ON **DELETE** **CASCADE**
+    **REFERENCES** `users` (`id`) ON **DELETE** **RESTRICT**
 ) **ENGINE**=InnoDB;
 
 **CREATE** **TABLE** `order_items` (
@@ -282,3 +282,91 @@ Database creation query :
 **INSERT** **INTO** `categories` (`name`, `slug`, `image`, `status`) **VALUES** ('Computers & Laptops', 'computers-laptops', '1.png', 1), ('Digital Cameras', 'digital-cameras', '2.png', 1), ('Smart Phones', 'smart-phones', '3.png', 1), ('Televisions', 'televisions', '4.png', 1), ('Audio', 'audio', '5.png', 1);
 
 **INSERT** **INTO** `products` (`category_id`, `name`, `slug`, `description`, `price`, `stock`, `image`, `status`) **VALUES** (1, 'MacBook Pro 13" Display, i5', 'macbook-pro-13-i5', 'Apple MacBook Pro with Retina Display, **8GB** **RAM**, **256GB** **SSD**.', **1199**.99, 15, 'product-1.jpg', 1), (5, 'Bose SoundLink Bluetooth Speaker', 'bose-soundlink-speaker', 'High performance wireless audio speaker with water-resistant body.', 79.99, 25, 'product-2.jpg', 1), (3, 'Apple 11" iPad Pro Wi-Fi **256GB**', 'apple-ipad-pro-11', 'Liquid Retina display with ProMotion and **A12X** Bionic chip.', **899**.99, 10, 'product-3.jpg', 1), (3, 'Google Pixel 3 XL **128GB**', 'google-pixel-3-xl', 'Crisp **OLED** display, incredible low-light camera, long battery life.', 41.67, 30, 'product-4.jpg', 1);
+
+## Migrations run after initial schema
+
+### integrity-migration.sql (applied)
+
+Purpose:
+1. FK safety: block category deletes that still have products, and block user deletes that still have orders (was ON DELETE CASCADE = silent wipe). The schema above already reflects RESTRICT.
+2. Stock triggers: inventory stays correct no matter WHERE the change comes from (PHP checkout, admin panel, phpMyAdmin, seed scripts). PHP no longer deducts/restocks stock itself — the triggers own that logic.
+
+Seeding bypass: to insert orders WITHOUT touching stock (history fill):
+    SET @skip_stock_adjustments = 1;
+    ... your INSERTs ...
+    SET @skip_stock_adjustments = NULL;
+
+Full script:
+
+```sql
+-- 1A) products.category_id : CASCADE -> RESTRICT
+ALTER TABLE products DROP FOREIGN KEY fk_products_category;
+ALTER TABLE products
+    ADD CONSTRAINT fk_products_category
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT;
+
+-- 1B) orders.user_id : CASCADE -> RESTRICT
+ALTER TABLE orders DROP FOREIGN KEY fk_orders_user;
+ALTER TABLE orders
+    ADD CONSTRAINT fk_orders_user
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT;
+
+-- 2) Stock triggers
+DELIMITER //
+
+-- T1: deduct stock whenever an order item is inserted (checkout OR seed script)
+DROP TRIGGER IF EXISTS trg_deduct_stock_on_item //
+CREATE TRIGGER trg_deduct_stock_on_item
+AFTER INSERT ON order_items
+FOR EACH ROW
+BEGIN
+    IF @skip_stock_adjustments IS NULL THEN
+        UPDATE products
+        SET stock = stock - NEW.quantity
+        WHERE id = NEW.product_id AND status = 1 AND stock >= NEW.quantity;
+
+        IF ROW_COUNT() = 0 THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Insufficient stock for product.';
+        END IF;
+    END IF;
+END //
+
+-- T2: restock when an order is cancelled, re-deduct if it is reactivated
+DROP TRIGGER IF EXISTS trg_restock_on_cancel //
+CREATE TRIGGER trg_restock_on_cancel
+AFTER UPDATE ON orders
+FOR EACH ROW
+BEGIN
+    IF @skip_stock_adjustments IS NULL THEN
+        IF NEW.order_status = 'cancelled' AND OLD.order_status != 'cancelled' THEN
+            UPDATE products p
+            JOIN order_items oi ON oi.product_id = p.id
+            SET p.stock = p.stock + oi.quantity
+            WHERE oi.order_id = NEW.id;
+        ELSEIF OLD.order_status = 'cancelled' AND NEW.order_status != 'cancelled' THEN
+            UPDATE products p
+            JOIN order_items oi ON oi.product_id = p.id
+            SET p.stock = GREATEST(p.stock - oi.quantity, 0)
+            WHERE oi.order_id = NEW.id;
+        END IF;
+    END IF;
+END //
+
+-- T3: restore stock if a non-cancelled order row is ever deleted
+DROP TRIGGER IF EXISTS trg_restock_on_order_delete //
+CREATE TRIGGER trg_restock_on_order_delete
+BEFORE DELETE ON orders
+FOR EACH ROW
+BEGIN
+    IF @skip_stock_adjustments IS NULL AND OLD.order_status != 'cancelled' THEN
+        UPDATE products p
+        JOIN order_items oi ON oi.product_id = p.id
+        SET p.stock = p.stock + oi.quantity
+        WHERE oi.order_id = OLD.id;
+    END IF;
+END //
+
+DELIMITER ;
+```
+
+Verified with an 18-check live test suite (FK rules, trigger existence, deduct/restock/delete paths, bypass flag, RESTRICT blocking, cleanup) — all passed.
