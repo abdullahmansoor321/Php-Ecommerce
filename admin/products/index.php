@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../config/constants.php';
 require_once __DIR__ . '/../../core/Database.php';
 require_once __DIR__ . '/../../core/Session.php';
+require_once __DIR__ . '/../../core/Csrf.php';
 
 $page_title = "Manage Products";
 require_once __DIR__ . '/../../includes/admin-header.php';
@@ -106,9 +107,13 @@ $products = $db->fetchAll("
                                             <a href="<?= APP_URL ?>/admin/products/edit.php?id=<?= $prod['id'] ?>" class="btn btn-link text-dark px-2 mb-0">
                                                 <i class="material-symbols-rounded text-sm me-1">edit</i>Edit
                                             </a>
-                                            <a href="<?= APP_URL ?>/admin/products/delete.php?id=<?= $prod['id'] ?>" class="btn btn-link text-danger px-2 mb-0" onclick="return confirm('Are you sure you want to delete this product?');">
-                                                <i class="material-symbols-rounded text-sm me-1">delete</i>Delete
-                                            </a>
+                                            <form method="POST" action="<?= APP_URL ?>/admin/products/delete.php" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this product?');">
+                                                <input type="hidden" name="id" value="<?= $prod['id'] ?>">
+                                                <?= Csrf::field() ?>
+                                                <button type="submit" class="btn btn-link text-danger px-2 mb-0">
+                                                    <i class="material-symbols-rounded text-sm me-1">delete</i>Delete
+                                                </button>
+                                            </form>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>

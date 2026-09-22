@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../core/Session.php';
 require_once __DIR__ . '/../../core/FileUploader.php';
 require_once __DIR__ . '/../../core/Validator.php';
 require_once __DIR__ . '/../../core/Auth.php';
+require_once __DIR__ . '/../../core/Csrf.php';
 
 Session::start();
 Auth::requireAdmin();
@@ -22,6 +23,11 @@ if (!$category) {
 $errors = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!Csrf::verify($_POST['csrf_token'] ?? null)) {
+        Session::setFlash('error', 'Security check failed. Please try again.');
+        header('Location: ' . APP_URL . '/admin/categories/edit.php?id=' . $id);
+        exit;
+    }
     $name = trim($_POST['name'] ?? '');
     $slug = trim($_POST['slug'] ?? '');
     $status = isset($_POST['status']) ? 1 : 0;
@@ -88,6 +94,7 @@ require_once __DIR__ . '/../../includes/admin-header.php';
                 <?php endif; ?>
 
                 <form role="form" action="" method="POST" enctype="multipart/form-data">
+                    <?= Csrf::field() ?>
                     <div class="input-group input-group-outline mb-3 is-filled">
                         <label class="form-label">Category Name *</label>
                         <input type="text" class="form-control" name="name" required value="<?= htmlspecialchars($_POST['name'] ?? $category['name']) ?>">

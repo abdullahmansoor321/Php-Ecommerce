@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../config/constants.php';
 require_once __DIR__ . '/../../core/Database.php';
 require_once __DIR__ . '/../../core/Session.php';
+require_once __DIR__ . '/../../core/Csrf.php';
 
 $page_title = "Manage Categories";
 require_once __DIR__ . '/../../includes/admin-header.php';
@@ -90,9 +91,13 @@ $categories = $db->fetchAll("SELECT * FROM categories ORDER BY created_at DESC L
                                             <a href="<?= APP_URL ?>/admin/categories/edit.php?id=<?= $cat['id'] ?>" class="btn btn-link text-dark px-2 mb-0">
                                                 <i class="material-symbols-rounded text-sm me-1">edit</i>Edit
                                             </a>
-                                            <a href="<?= APP_URL ?>/admin/categories/delete.php?id=<?= $cat['id'] ?>" class="btn btn-link text-danger px-2 mb-0" onclick="return confirm('Are you sure you want to delete this category?');">
-                                                <i class="material-symbols-rounded text-sm me-1">delete</i>Delete
-                                            </a>
+                                            <form method="POST" action="<?= APP_URL ?>/admin/categories/delete.php" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this category?');">
+                                                <input type="hidden" name="id" value="<?= $cat['id'] ?>">
+                                                <?= Csrf::field() ?>
+                                                <button type="submit" class="btn btn-link text-danger px-2 mb-0">
+                                                    <i class="material-symbols-rounded text-sm me-1">delete</i>Delete
+                                                </button>
+                                            </form>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>

@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../config/constants.php';
 require_once __DIR__ . '/../core/Session.php';
 require_once __DIR__ . '/../core/Auth.php';
+require_once __DIR__ . '/../core/Csrf.php';
 
 Session::start();
 
@@ -14,6 +15,9 @@ if (Auth::isAdmin()) {
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!Csrf::verify($_POST['csrf_token'] ?? null)) {
+        $error = 'Security check failed. Please refresh the page and try again.';
+    } else {
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
 
@@ -32,6 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $error = 'Invalid email or password.';
         }
+    }
     }
 }
 
@@ -107,6 +112,7 @@ $page_title = 'Admin Login - Material Dashboard';
                 <?php endif; ?>
 
                 <form role="form" class="text-start" action="" method="POST">
+                  <?= Csrf::field() ?>
                   <div class="input-group input-group-outline my-3">
                     <label class="form-label">Email</label>
                     <input type="email" class="form-control" name="email" required value="<?= htmlspecialchars($_POST['email'] ?? '') ?>">

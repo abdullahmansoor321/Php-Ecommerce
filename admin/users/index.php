@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../config/constants.php';
 require_once __DIR__ . '/../../core/Database.php';
 require_once __DIR__ . '/../../core/Session.php';
+require_once __DIR__ . '/../../core/Csrf.php';
 
 $page_title = "Manage Users";
 require_once __DIR__ . '/../../includes/admin-header.php';
@@ -80,10 +81,20 @@ $users = $db->fetchAll("SELECT id, name, email, role, is_active, created_at FROM
                                             <span class="text-secondary text-xs font-weight-bold"><?= $u['created_at'] ?></span>
                                         </td>
                                         <td class="align-middle text-end pe-4">
-                                            <?php if ($u['id'] !== $_SESSION['user_id']): ?>
-                                                <a href="<?= APP_URL ?>/admin/users/toggle.php?id=<?= $u['id'] ?>" class="btn btn-link text-<?= $u['is_active'] == 1 ? 'warning' : 'success' ?> px-3 mb-0 text-xs font-weight-bold">
-                                                    <?= $u['is_active'] == 1 ? 'Deactivate' : 'Activate' ?>
-                                                </a>
+                                            <?php if ((int)$u['id'] !== (int)$_SESSION['user_id']): ?>
+                                                <?php if ($u['is_active'] == 1): ?>
+                                                <form method="POST" action="<?= APP_URL ?>/admin/users/toggle.php" class="d-inline" onsubmit="return confirm('Deactivate this user?');">
+                                                    <input type="hidden" name="id" value="<?= $u['id'] ?>">
+                                                    <?= Csrf::field() ?>
+                                                    <button type="submit" class="btn btn-link text-warning px-3 mb-0 text-xs font-weight-bold">Deactivate</button>
+                                                </form>
+                                                <?php else: ?>
+                                                <form method="POST" action="<?= APP_URL ?>/admin/users/toggle.php" class="d-inline" onsubmit="return confirm('Activate this user?');">
+                                                    <input type="hidden" name="id" value="<?= $u['id'] ?>">
+                                                    <?= Csrf::field() ?>
+                                                    <button type="submit" class="btn btn-link text-success px-3 mb-0 text-xs font-weight-bold">Activate</button>
+                                                </form>
+                                                <?php endif; ?>
                                             <?php else: ?>
                                                 <span class="text-xs text-muted me-3">Current Admin</span>
                                             <?php endif; ?>

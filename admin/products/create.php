@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../core/Session.php';
 require_once __DIR__ . '/../../core/FileUploader.php';
 require_once __DIR__ . '/../../core/Validator.php';
 require_once __DIR__ . '/../../core/Auth.php';
+require_once __DIR__ . '/../../core/Csrf.php';
 
 Session::start();
 Auth::requireAdmin();
@@ -21,6 +22,11 @@ $stock = '';
 $status = 1;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!Csrf::verify($_POST['csrf_token'] ?? null)) {
+        Session::setFlash('error', 'Security check failed. Please try again.');
+        header('Location: ' . APP_URL . '/admin/products/create.php');
+        exit;
+    }
     $name = trim($_POST['name'] ?? '');
     $slug = trim($_POST['slug'] ?? '');
     if (empty($slug)) {
@@ -102,6 +108,7 @@ require_once __DIR__ . '/../../includes/admin-header.php';
                 <?php endif; ?>
 
                 <form role="form" action="" method="POST" enctype="multipart/form-data">
+                    <?= Csrf::field() ?>
                     <div class="row">
                         <div class="col-md-6">
                             <div class="input-group input-group-outline mb-3 <?= !empty($name) ? 'is-filled' : '' ?>">

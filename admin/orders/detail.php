@@ -3,6 +3,7 @@ require_once __DIR__ . '/../../config/constants.php';
 require_once __DIR__ . '/../../core/Database.php';
 require_once __DIR__ . '/../../core/Session.php';
 require_once __DIR__ . '/../../core/Auth.php';
+require_once __DIR__ . '/../../core/Csrf.php';
 
 Session::start();
 Auth::requireAdmin();
@@ -25,6 +26,11 @@ if (!$order) {
 
 // Handle status update
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!Csrf::verify($_POST['csrf_token'] ?? null)) {
+        Session::setFlash('error', 'Security check failed. Please try again.');
+        header('Location: ' . APP_URL . '/admin/orders/detail.php?id=' . $id);
+        exit;
+    }
     $allowedOrderStatuses = ['processing', 'shipped', 'delivered', 'cancelled'];
     $allowedPaymentStatuses = ['pending', 'completed', 'failed'];
 
@@ -106,6 +112,7 @@ require_once __DIR__ . '/../../includes/admin-header.php';
                         <div class="card border p-3 h-100">
                             <h6 class="text-dark font-weight-bold mb-3">Update Order Status</h6>
                             <form action="" method="POST">
+                                <?= Csrf::field() ?>
                                 <div class="input-group input-group-outline mb-3 is-filled">
                                     <label class="form-label">Order Fulfillment Status</label>
                                     <select name="order_status" class="form-control">
