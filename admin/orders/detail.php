@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../core/Database.php';
 require_once __DIR__ . '/../../core/Session.php';
 require_once __DIR__ . '/../../core/Auth.php';
 require_once __DIR__ . '/../../core/Csrf.php';
+require_once __DIR__ . '/../../core/Mailer.php';
 
 Session::start();
 Auth::requireAdmin();
@@ -24,6 +25,15 @@ if (!$order) {
     exit;
 }
 
+// Fetched before the POST handler because the payment-received email below
+// needs the line items at send time, and the handler exits via redirect.
+$orderItems = $db->fetchAll("
+    SELECT oi.*, p.name as product_name, p.image as product_image 
+    FROM order_items oi 
+    JOIN products p ON oi.product_id = p.id 
+    WHERE oi.order_id = ?
+", [$id]);
+
 // Handle status update
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!Csrf::verify($_POST['csrf_token'] ?? null)) {
@@ -43,6 +53,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    // The two toggles drive each other, because cash on delivery is collected
+    // at the door: the money and the parcel always change hands together.
+    // Marking payment completed sets delivered, and marking delivered sets
+    // payment completed, so a single save can never leave the order claiming
+    // to be paid but undelivered (or the reverse).
+    if ($order['payment_method'] === 'cod') {
+        if ($paymentStatus === 'completed') {
+            $orderStatus = 'delivered';
+        } elseif ($orderStatus === 'delivered') {
+            $paymentStatus = 'completed';
+        }
+    }
+
     $conn = $db->getConnection();
     $conn->begin_transaction();
 
@@ -56,6 +79,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $conn->commit();
         Session::setFlash('success', 'Order status updated successfully!' . ($orderStatus === 'cancelled' ? ' Items restocked to inventory.' : ''));
+
+        // One email reports both statuses exactly as saved, rather than
+        // paraphrasing them. Cash on delivery is collected at the door, and
+        // admins commonly tick payment and delivered in separate saves, so any
+        // narrative copy here ("on its way", "being prepared") becomes wrong the
+        // moment the next toggle is saved. Listing the two recorded values is
+        // never wrong. Sent only when something actually changed, so re-saving
+        // the page does not resend, and never for cancelled orders.
+        $statusChanged = $paymentStatus !== $order['payment_status']
+            || $orderStatus !== $order['order_status'];
+
+        if ($statusChanged && $orderStatus !== 'cancelled' && $order['payment_method'] === 'cod') {
+            // Payment and delivery are joined for COD (see above), so a completed
+            // payment always means the order was handed over. That lets the copy
+            // state both as plain fact and stay warm, with nothing to hedge.
+            $message = 'Thank you for shopping with us. Your payment of $' . number_format((float)$order['total_amount'], 2)
+                . ' has been received, and your order has been delivered. '
+                . 'We hope you love it. This email is a receipt for your records, '
+                . 'so please keep it safe.';
+
+            Mailer::send(
+                (string)$order['customer_name'],
+                (string)$order['customer_email'],
+                'Order delivered - ' . $order['order_number'],
+                Mailer::renderOrder(
+                    'Payment received',
+                    $message,
+                    [
+                        'order_number'     => $order['order_number'],
+                        'total_amount'     => $order['total_amount'],
+                        'payment_method'   => 'Cash on Delivery',
+                        'created_at'       => $order['created_at'],
+                        'shipping_address' => $order['shipping_address'],
+                    ],
+                    array_map(static function (array $item): array {
+                        return [
+                            'name'       => (string)$item['product_name'],
+                            'quantity'   => (int)$item['quantity'],
+                            'unit_price' => (float)$item['unit_price'],
+                            'subtotal'   => (float)$item['subtotal'],
+                        ];
+                    }, $orderItems)
+                )
+            );
+        }
     } catch (mysqli_sql_exception $e) {
         $conn->rollback();
         Session::setFlash('error', 'Failed to update order status. Please try again.');
@@ -64,13 +132,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Location: ' . APP_URL . '/admin/orders/detail.php?id=' . $id);
     exit;
 }
-
-$orderItems = $db->fetchAll("
-    SELECT oi.*, p.name as product_name, p.image as product_image 
-    FROM order_items oi 
-    JOIN products p ON oi.product_id = p.id 
-    WHERE oi.order_id = ?
-", [$id]);
 
 $page_title = "Order Details - " . $order['order_number'];
 require_once __DIR__ . '/../../includes/admin-header.php';
@@ -111,6 +172,14 @@ require_once __DIR__ . '/../../includes/admin-header.php';
                     <div class="col-md-6">
                         <div class="card border p-3 h-100">
                             <h6 class="text-dark font-weight-bold mb-3">Update Order Status</h6>
+                            <?php if ($order['payment_method'] === 'cod'): ?>
+                                <p class="text-xs text-secondary mb-3">
+                                    Cash on delivery is collected at the door, so payment and delivery move together.
+                                    Marking the payment <strong>Completed</strong> also marks the order
+                                    <strong>Delivered</strong>, and marking it <strong>Delivered</strong> also marks the payment
+                                    <strong>Completed</strong>.
+                                </p>
+                            <?php endif; ?>
                             <form action="" method="POST">
                                 <?= Csrf::field() ?>
                                 <div class="input-group input-group-outline mb-3 is-filled">

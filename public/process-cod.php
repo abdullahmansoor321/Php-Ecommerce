@@ -4,6 +4,7 @@ require_once __DIR__ . '/../core/Session.php';
 require_once __DIR__ . '/../core/Auth.php';
 require_once __DIR__ . '/../core/Cart.php';
 require_once __DIR__ . '/../core/Database.php';
+require_once __DIR__ . '/../core/Mailer.php';
 
 Session::start();
 header('Content-Type: application/json');
@@ -81,6 +82,41 @@ try {
         $db->query('DELETE FROM cart_items WHERE cart_token = ?', [$cartToken]);
     }
     $mysqli->commit();
+
+    // The order is committed, so the mail below cannot roll anything back. This
+    // is deliberately inside the outer try only because the JSON response is
+    // built here too; Mailer::send() itself never throws, so a mail failure
+    // still returns success and the customer reaches their confirmation page.
+    Mailer::send(
+        trim($input['name']),
+        trim($input['email']),
+        "Order confirmed - {$orderNumber} (pay on delivery)",
+        Mailer::renderOrder(
+            'Order received',
+            'Thanks for shopping with us. We have received your order and it is being prepared. '
+                . 'Payment is cash on delivery: $' . number_format($totalAmount, 2)
+                . ' to be paid when your order arrives. Please keep the exact amount ready, '
+                . 'as the courier may not be able to provide change. '
+                . 'Check the delivery address below and reply to this email if anything needs '
+                . 'changing, as we can still update it before dispatch.',
+            [
+                'order_number'     => $orderNumber,
+                'total_amount'     => $totalAmount,
+                'payment_method'   => 'Cash on Delivery',
+                'created_at'       => date('Y-m-d H:i:s'),
+                'shipping_address' => $shippingAddress,
+            ],
+            array_map(static function (array $item): array {
+                $unitPrice = (float)$item['price'];
+                return [
+                    'name'       => (string)$item['name'],
+                    'quantity'   => (int)$item['quantity'],
+                    'unit_price' => $unitPrice,
+                    'subtotal'   => $unitPrice * (int)$item['quantity'],
+                ];
+            }, $cartItems)
+        )
+    );
 
     echo json_encode(['success' => true, 'redirect_url' => FRONT_URL . '/order-confirmation.php?order_number=' . urlencode($orderNumber)]);
 } catch (Throwable $error) {
