@@ -21,7 +21,22 @@ class Stripe
             throw new RuntimeException('Stripe secret key is not configured.');
         }
 
+        // CA bundle resolution order:
+        //   1. STRIPE_CA_BUNDLE from .env (explicit override, use on live hosts)
+        //   2. curl.cainfo from php.ini
+        //   3. config/cacert.pem shipped with the project
+        // WAMP's PHP builds often have no system CA store, so without one of
+        // these every request fails with "unable to get local issuer
+        // certificate" (curl errno 60). The project bundle is checked last so
+        // it works even when php.ini has not been reloaded by Apache.
         $caBundle = getenv('STRIPE_CA_BUNDLE') ?: ini_get('curl.cainfo');
+        if ($caBundle === false || $caBundle === '' || !is_file($caBundle)) {
+            $projectBundle = dirname(__DIR__) . '/config/cacert.pem';
+            if (is_file($projectBundle)) {
+                $caBundle = $projectBundle;
+            }
+        }
+
         $curl = curl_init(self::API_BASE_URL . $path);
         $curlOptions = [
             CURLOPT_RETURNTRANSFER => true,

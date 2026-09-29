@@ -1,4 +1,22 @@
 .env
 config/stripe.local.php
+config/mail.local.php
+
+# Composer installs PHPMailer into vendor/. Commit composer.json and
+# composer.lock, never vendor/ (regenerate with: composer install).
+/vendor/
+
+# Local Composer binary, fetched from getcomposer.org.
+/composer.phar
+
+# CA bundle: 190KB of public root certificates. Uncomment the line below to
+# commit it. core/Stripe.php falls back to config/cacert.pem in code, so
+# without this file Stripe fails with curl errno 60 ("unable to get local
+# issuer certificate") on any machine that has no system CA store.
 config/cacert.pem
+
+# Upstream theme/template sources, vendored for reference only. The app uses
+# public/assets/front and admin/assets, so these are never read at runtime.
+material-dashboard-master/
+molla-eCommerce-html-template/
 

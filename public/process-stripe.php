@@ -5,6 +5,7 @@ require_once __DIR__ . '/../core/Auth.php';
 require_once __DIR__ . '/../core/Cart.php';
 require_once __DIR__ . '/../core/Database.php';
 require_once __DIR__ . '/../core/Stripe.php';
+require_once __DIR__ . '/../core/Mailer.php';
 
 Session::start();
 
@@ -96,6 +97,44 @@ try {
         $mysqli->rollback();
         throw $error;
     }
+
+    // The order is committed at this point. Mail is sent AFTER the transaction
+    // closes and outside both try/catch blocks, so a slow or unreachable SMTP
+    // server can never roll back a paid order, leave stock undeducted, or
+    // re-trigger the Stripe charge. Mailer::send() swallows all errors, so the
+    // redirect below always runs regardless of the mail outcome.
+    $recipientName = trim((string)($stripeSession['customer_details']['name'] ?? ''));
+    if ($recipientName === '') {
+        $recipientName = trim(explode("\n", $shippingAddress)[0]);
+    }
+
+    Mailer::send(
+        $recipientName,
+        (string)($stripeSession['customer_email'] ?? ''),
+        "Payment received - order {$orderNumber}",
+        Mailer::renderOrder(
+            'Payment received',
+            'Thank you for your order. Your payment of $' . number_format($totalAmount, 2)
+                . ' has been processed successfully and we have started preparing your items for dispatch. '
+                . "You'll get another email when your order ships.",
+            [
+                'order_number'     => $orderNumber,
+                'total_amount'     => $totalAmount,
+                'payment_method'   => 'Card (Stripe)',
+                'created_at'       => date('Y-m-d H:i:s'),
+                'shipping_address' => $shippingAddress,
+            ],
+            array_map(static function (array $item): array {
+                $unitPrice = (float)$item['price'];
+                return [
+                    'name'       => (string)$item['name'],
+                    'quantity'   => (int)$item['quantity'],
+                    'unit_price' => $unitPrice,
+                    'subtotal'   => $unitPrice * (int)$item['quantity'],
+                ];
+            }, $cartItems)
+        )
+    );
 
     header('Location: ' . FRONT_URL . '/order-confirmation.php?order_number=' . urlencode($orderNumber));
     exit;
