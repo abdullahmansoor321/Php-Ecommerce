@@ -28,13 +28,18 @@ class Mailer
             return false;
         }
 
-        // PHPMailer is installed with Composer (phpmailer/phpmailer ^7.1).
-        // The autoloader is required once per request; require_once keeps this
-        // safe when both process-cod.php and process-stripe.php run in one
-        // request, and is a no-op if another module already loaded it.
-        require_once BASE_PATH . '/vendor/autoload.php';
-
+        // PHPMailer is installed with Composer (phpmailer/phpmailer ^7.1). The
+        // autoloader is required inside the try below on purpose: vendor/ is
+        // gitignored, so on a fresh clone or a deploy that skipped
+        // "composer install" this file is missing and require_once throws a
+        // fatal Error. Guarded here, send() returns false like any other mail
+        // failure and the caller's redirect still runs, so a missing dependency
+        // can never roll back a committed order or show a paid customer a
+        // payment-failed page. require_once keeps it idempotent when both
+        // process-cod.php and process-stripe.php run in one request.
         try {
+            require_once BASE_PATH . '/vendor/autoload.php';
+
             $mail = new PHPMailer\PHPMailer\PHPMailer(true);
             $mail->isSMTP();
             $mail->Host = $config['host'];
