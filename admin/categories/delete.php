@@ -2,11 +2,11 @@
 require_once __DIR__ . '/../../config/constants.php';
 require_once __DIR__ . '/../../core/Database.php';
 require_once __DIR__ . '/../../core/Session.php';
-require_once __DIR__ . '/../../core/Auth.php';
+require_once __DIR__ . '/../../core/AdminAuth.php';
 require_once __DIR__ . '/../../core/Csrf.php';
 
-Session::start();
-Auth::requireAdmin();
+Session::startAdmin();
+AdminAuth::requireAdmin();
 
 $db = Database::getInstance();
 $id = (int)($_POST['id'] ?? 0);

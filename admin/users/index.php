@@ -9,15 +9,56 @@ require_once __DIR__ . '/../../includes/admin-header.php';
 
 $db = Database::getInstance();
 
+// Search (name / email) plus role and account-status facets. Values are bound
+// or whitelisted, never concatenated into SQL.
+$search = trim((string)($_GET['q'] ?? ''));
+$roleFilter = (string)($_GET['role'] ?? '');
+$activeFilter = (string)($_GET['active'] ?? '');
+
+$where = [];
+$params = [];
+if ($search !== '') {
+    $where[] = '(u.name LIKE ? OR u.email LIKE ?)';
+    $like = '%' . $search . '%';
+    $params[] = $like;
+    $params[] = $like;
+}
+if ($roleFilter === 'admin' || $roleFilter === 'customer') {
+    $where[] = 'u.role = ?';
+    $params[] = $roleFilter;
+}
+if ($activeFilter === '1' || $activeFilter === '0') {
+    $where[] = 'u.is_active = ?';
+    $params[] = (int)$activeFilter;
+}
+$whereSql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
+
 // Pagination setup
 $perPage = 10;
 $page = max(1, (int)($_GET['page'] ?? 1));
-$totalRows = (int)($db->fetchOne("SELECT COUNT(*) as c FROM users")['c'] ?? 0);
+$totalRows = (int)($db->fetchOne("SELECT COUNT(*) as c FROM users u $whereSql", $params)['c'] ?? 0);
 $totalPages = max(1, (int)ceil($totalRows / $perPage));
 $page = min($page, $totalPages);
 $offset = ($page - 1) * $perPage;
 
-$users = $db->fetchAll("SELECT id, name, email, role, is_active, created_at FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?", [$perPage, $offset]);
+$users = $db->fetchAll("SELECT u.id, u.name, u.email, u.role, u.is_active, u.created_at FROM users u $whereSql ORDER BY u.created_at DESC LIMIT ? OFFSET ?", array_merge($params, [$perPage, $offset]));
+
+// Options for the filter toolbar.
+$filterSearchTerm  = $search;
+$filterResultCount = $totalRows;
+$filterResultNoun  = 'users';
+$filterSelects = [
+    'role' => [
+        'label'   => 'Role',
+        'value'   => $roleFilter,
+        'options' => ['' => 'All roles', 'admin' => 'Admin', 'customer' => 'Customer'],
+    ],
+    'active' => [
+        'label'   => 'Status',
+        'value'   => $activeFilter,
+        'options' => ['' => 'All statuses', '1' => 'Active', '0' => 'Inactive'],
+    ],
+];
 ?>
 
 <div class="row">
@@ -37,6 +78,8 @@ $users = $db->fetchAll("SELECT id, name, email, role, is_active, created_at FROM
                     <div class="alert alert-danger text-white mx-4" role="alert"><?= htmlspecialchars($error) ?></div>
                 <?php endif; ?>
 
+                <?php require __DIR__ . '/../../includes/admin-filters.php'; ?>
+
                 <div class="table-responsive p-0">
                     <table class="table align-items-center mb-0">
                         <thead>
@@ -51,7 +94,7 @@ $users = $db->fetchAll("SELECT id, name, email, role, is_active, created_at FROM
                         <tbody>
                             <?php if (empty($users)): ?>
                                 <tr>
-                                    <td colspan="5" class="text-center py-4 text-muted">No users registered yet.</td>
+                                    <td colspan="5" class="text-center py-4 text-muted"><?= ($search !== '' || $roleFilter !== '' || $activeFilter !== '') ? 'No users match your filters.' : 'No users registered yet.' ?></td>
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($users as $u): ?>
@@ -81,7 +124,7 @@ $users = $db->fetchAll("SELECT id, name, email, role, is_active, created_at FROM
                                             <span class="text-secondary text-xs font-weight-bold"><?= $u['created_at'] ?></span>
                                         </td>
                                         <td class="align-middle text-end pe-4">
-                                            <?php if ((int)$u['id'] !== (int)$_SESSION['user_id']): ?>
+                                            <?php if ((int)$u['id'] !== (int)$_SESSION['admin_user_id']): ?>
                                                 <?php if ($u['is_active'] == 1): ?>
                                                 <form method="POST" action="<?= APP_URL ?>/admin/users/toggle.php" class="d-inline" onsubmit="return confirm('Deactivate this user?');">
                                                     <input type="hidden" name="id" value="<?= $u['id'] ?>">

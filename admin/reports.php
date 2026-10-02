@@ -2,18 +2,21 @@
 require_once __DIR__ . '/../config/constants.php';
 require_once __DIR__ . '/../core/Database.php';
 require_once __DIR__ . '/../core/Session.php';
-require_once __DIR__ . '/../core/Auth.php';
+require_once __DIR__ . '/../core/AdminAuth.php';
 
-Session::start();
-Auth::requireAdmin();
+Session::startAdmin();
+AdminAuth::requireAdmin();
 
 $db = Database::getInstance();
 
-/* ---------- Weekly: sales per day for the last 7 days (zero-filled) ---------- */
+/* ---------- Weekly: sales per day for the last 7 days (zero-filled) ----------
+ * Cancelled orders are excluded throughout this report: they are not sales, so
+ * counting them would overstate every total and trend line on this page. */
 $weeklyRows = $db->fetchAll(
     "SELECT DATE(created_at) as day, SUM(total_amount) as sales, COUNT(*) as orders_count
      FROM orders
-     WHERE created_at >= NOW() - INTERVAL 7 DAY
+     WHERE order_status <> 'cancelled'
+       AND created_at >= NOW() - INTERVAL 7 DAY
      GROUP BY day"
 );
 $weeklyMap = [];
@@ -33,7 +36,8 @@ $weekTotal = array_sum($weeklyData);
 $monthlyRows = $db->fetchAll(
     "SELECT MONTH(created_at) as m, SUM(total_amount) as sales, COUNT(*) as orders_count
      FROM orders
-     WHERE YEAR(created_at) = YEAR(CURDATE())
+     WHERE order_status <> 'cancelled'
+       AND YEAR(created_at) = YEAR(CURDATE())
      GROUP BY m"
 );
 $monthlyMap = [];
@@ -56,6 +60,7 @@ $yearTotal = array_sum($monthlyData);
 $yearlyRows = $db->fetchAll(
     "SELECT YEAR(created_at) as y, SUM(total_amount) as sales, COUNT(*) as orders_count
      FROM orders
+     WHERE order_status <> 'cancelled'
      GROUP BY y
      ORDER BY y ASC"
 );
@@ -66,7 +71,7 @@ foreach ($yearlyRows as $row) {
     $yearlyData[] = round((float)$row['sales'], 2);
 }
 
-$allTime = $db->fetchOne("SELECT SUM(total_amount) as total, COUNT(*) as orders_count FROM orders");
+$allTime = $db->fetchOne("SELECT COALESCE(SUM(total_amount), 0) as total, COUNT(*) as orders_count FROM orders WHERE order_status <> 'cancelled'");
 $allTimeTotal = round((float)($allTime['total'] ?? 0), 2);
 $allTimeOrders = (int)($allTime['orders_count'] ?? 0);
 
@@ -85,7 +90,7 @@ $cards = [
 <!-- Summary metric cards -->
 <div class="row">
     <?php foreach ($cards as $card): ?>
-        <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
+        <div class="col-xl-3 col-sm-6 mb-4">
             <div class="card">
                 <div class="card-header p-2 ps-3">
                     <div class="d-flex justify-content-between">
@@ -114,7 +119,7 @@ $cards = [
         <div class="card">
             <div class="card-body">
                 <h6 class="mb-0">Weekly Sales</h6>
-                <p class="text-sm">Revenue per day — last 7 days</p>
+                <p class="text-sm">Revenue per day â€” last 7 days</p>
                 <div class="pe-2">
                     <div class="chart">
                         <canvas id="chart-weekly" class="chart-canvas" height="170"></canvas>
@@ -132,7 +137,7 @@ $cards = [
         <div class="card">
             <div class="card-body">
                 <h6 class="mb-0">Monthly Sales</h6>
-                <p class="text-sm">Revenue per month — <?= date('Y') ?></p>
+                <p class="text-sm">Revenue per month â€” <?= date('Y') ?></p>
                 <div class="pe-2">
                     <div class="chart">
                         <canvas id="chart-monthly" class="chart-canvas" height="170"></canvas>
@@ -150,7 +155,7 @@ $cards = [
         <div class="card">
             <div class="card-body">
                 <h6 class="mb-0">Yearly Sales</h6>
-                <p class="text-sm">Revenue per year — all time</p>
+                <p class="text-sm">Revenue per year â€” all time</p>
                 <div class="pe-2">
                     <div class="chart">
                         <canvas id="chart-yearly" class="chart-canvas" height="170"></canvas>
@@ -172,7 +177,7 @@ $cards = [
         <div class="card my-4">
             <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
                 <div class="bg-gradient-dark shadow-dark border-radius-lg pt-4 pb-3 px-4">
-                    <h6 class="text-white text-capitalize m-0">Monthly Breakdown — <?= date('Y') ?></h6>
+                    <h6 class="text-white text-capitalize m-0">Monthly Breakdown â€” <?= date('Y') ?></h6>
                 </div>
             </div>
             <div class="card-body px-0 pb-2">

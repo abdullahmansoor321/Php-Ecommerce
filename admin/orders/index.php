@@ -8,10 +8,36 @@ require_once __DIR__ . '/../../includes/admin-header.php';
 
 $db = Database::getInstance();
 
-// Pagination setup
+// Search (order number / customer name / customer email) plus fulfillment and
+// payment facets. Values are bound or whitelisted, never concatenated into SQL.
+$search = trim((string)($_GET['q'] ?? ''));
+$statusFilter = (string)($_GET['status'] ?? '');
+$paymentFilter = (string)($_GET['payment'] ?? '');
+
+$where = [];
+$params = [];
+if ($search !== '') {
+    $where[] = '(o.order_number LIKE ? OR u.name LIKE ? OR u.email LIKE ?)';
+    $like = '%' . $search . '%';
+    $params[] = $like;
+    $params[] = $like;
+    $params[] = $like;
+}
+if (in_array($statusFilter, ['pending', 'processing', 'shipped', 'delivered', 'cancelled'], true)) {
+    $where[] = 'o.order_status = ?';
+    $params[] = $statusFilter;
+}
+if (in_array($paymentFilter, ['pending', 'completed'], true)) {
+    $where[] = 'o.payment_status = ?';
+    $params[] = $paymentFilter;
+}
+$whereSql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
+
+// Pagination setup. The count query mirrors the list query's join so the
+// totals always agree with the rows actually shown.
 $perPage = 10;
 $page = max(1, (int)($_GET['page'] ?? 1));
-$totalRows = (int)($db->fetchOne("SELECT COUNT(*) as c FROM orders")['c'] ?? 0);
+$totalRows = (int)($db->fetchOne("SELECT COUNT(*) as c FROM orders o JOIN users u ON o.user_id = u.id $whereSql", $params)['c'] ?? 0);
 $totalPages = max(1, (int)ceil($totalRows / $perPage));
 $page = min($page, $totalPages);
 $offset = ($page - 1) * $perPage;
@@ -20,9 +46,28 @@ $orders = $db->fetchAll("
     SELECT o.*, u.name as customer_name, u.email as customer_email 
     FROM orders o 
     JOIN users u ON o.user_id = u.id 
+    $whereSql
     ORDER BY o.created_at DESC
     LIMIT ? OFFSET ?
-", [$perPage, $offset]);
+", array_merge($params, [$perPage, $offset]));
+
+// Options for the filter toolbar.
+$filterSearchTerm  = $search;
+$filterResultCount = $totalRows;
+$filterResultNoun  = 'orders';
+$filterSelects = [
+    'status' => [
+        'label'   => 'Fulfillment',
+        'value'   => $statusFilter,
+        'options' => ['' => 'All statuses', 'pending' => 'Pending', 'processing' => 'Processing',
+                      'shipped' => 'Shipped', 'delivered' => 'Delivered', 'cancelled' => 'Cancelled'],
+    ],
+    'payment' => [
+        'label'   => 'Payment',
+        'value'   => $paymentFilter,
+        'options' => ['' => 'All payments', 'pending' => 'Pending', 'completed' => 'Completed'],
+    ],
+];
 ?>
 
 <div class="row">
@@ -42,6 +87,8 @@ $orders = $db->fetchAll("
                     <div class="alert alert-danger text-white mx-4" role="alert"><?= htmlspecialchars($error) ?></div>
                 <?php endif; ?>
 
+                <?php require __DIR__ . '/../../includes/admin-filters.php'; ?>
+
                 <div class="table-responsive p-0">
                     <table class="table align-items-center mb-0">
                         <thead>
@@ -58,7 +105,7 @@ $orders = $db->fetchAll("
                         <tbody>
                             <?php if (empty($orders)): ?>
                                 <tr>
-                                    <td colspan="7" class="text-center py-4 text-muted">No incoming customer orders yet.</td>
+                                    <td colspan="7" class="text-center py-4 text-muted"><?= ($search !== '' || $statusFilter !== '' || $paymentFilter !== '') ? 'No orders match your filters.' : 'No incoming customer orders yet.' ?></td>
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($orders as $ord): ?>

@@ -4,11 +4,13 @@ require_once __DIR__ . '/../../core/Database.php';
 require_once __DIR__ . '/../../core/Session.php';
 require_once __DIR__ . '/../../core/FileUploader.php';
 require_once __DIR__ . '/../../core/Validator.php';
-require_once __DIR__ . '/../../core/Auth.php';
+require_once __DIR__ . '/../../core/AdminAuth.php';
 require_once __DIR__ . '/../../core/Csrf.php';
+require_once __DIR__ . '/../../core/Slug.php';
+require_once __DIR__ . '/../../core/ProductImage.php';
 
-Session::start();
-Auth::requireAdmin();
+Session::startAdmin();
+AdminAuth::requireAdmin();
 
 $db = Database::getInstance();
 $id = (int)($_GET['id'] ?? 0);
@@ -31,7 +33,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $name = trim($_POST['name'] ?? '');
     $slug = trim($_POST['slug'] ?? '');
-    $categoryId = (int)($_POST['category_id'] ?? 0);
+    if (empty($slug)) {
+        $slug = Slug::generate($name);
+    }
+    $categoryId = trim($_POST['category_id'] ?? '');
     $description = trim($_POST['description'] ?? '');
     $price = trim($_POST['price'] ?? '');
     $stock = (int)($_POST['stock'] ?? 0);
@@ -56,35 +61,135 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($existing) {
             $errors['slug'] = 'Product slug already exists for another product.';
         } else {
-            $imageName = $product['image'];
-            if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-                $uploadDir = BASE_PATH . '/public/uploads/products';
-                $uploaded = FileUploader::uploadImage($_FILES['image'], $uploadDir);
-                if ($uploaded) {
-                    if (!empty($product['image']) && file_exists($uploadDir . '/' . $product['image'])) {
-                        @unlink($uploadDir . '/' . $product['image']);
+            $existingImages = ProductImage::all($product['image'] ?? null);
+            $galleryManaged = ($_POST['image_manager'] ?? '0') === '1';
+            $imageError = null;
+            $submittedOrder = $_POST['image_order'] ?? array_map(function ($name) {
+                return 'existing:' . $name;
+            }, $existingImages);
+            $submittedOrder = is_array($submittedOrder) ? $submittedOrder : [];
+            $orderedExisting = [];
+            $seenTokens = [];
+
+            foreach ($submittedOrder as $token) {
+                if (!is_string($token) || isset($seenTokens[$token])) {
+                    $imageError = 'The image order is invalid. Please review the gallery and try again.';
+                    break;
+                }
+                $seenTokens[$token] = true;
+
+                if (strncmp($token, 'existing:', 9) === 0) {
+                    $filename = substr($token, 9);
+                    if (!in_array($filename, $existingImages, true)) {
+                        $imageError = 'The image order is invalid. Please review the gallery and try again.';
+                        break;
                     }
-                    $imageName = $uploaded;
-                } else {
-                    $errors['image'] = 'Invalid image file or size exceeds 2MB limit.';
+                    $orderedExisting[] = $filename;
+                } elseif (strncmp($token, 'new:', 4) !== 0 || !ctype_digit(substr($token, 4))) {
+                    $imageError = 'The image order is invalid. Please review the gallery and try again.';
+                    break;
                 }
             }
 
-            if (empty($errors)) {
-                $db->query(
-                    "UPDATE products SET category_id = ?, name = ?, slug = ?, description = ?, price = ?, stock = ?, image = ?, status = ? WHERE id = ?",
-                    [$categoryId, $name, $slug, $description, (float)$price, $stock, $imageName, $status, $id]
-                );
+            $incoming = count(array_filter($_FILES['images']['name'] ?? []));
+            $room = FileUploader::MAX_IMAGES - count($orderedExisting);
+            if ($imageError === null && $incoming > $room) {
+                $imageError = 'This gallery has ' . count($orderedExisting) . ' image(s). You can add ' . max(0, $room)
+                    . ' more (limit ' . FileUploader::MAX_IMAGES . '). Remove an image or choose fewer files.';
+            }
 
-                Session::setFlash('success', 'Product updated successfully!');
-                header('Location: ' . APP_URL . '/admin/products/index.php');
-                exit;
+            $storedByIndex = [];
+            $uploadedImageNames = [];
+            if ($imageError === null && $incoming > 0) {
+                [$storedByIndex, $rejected] = FileUploader::uploadImagesIndexed($_FILES['images'], UPLOADS_PATH . '/products/' . $id);
+                $uploadedImageNames = array_values($storedByIndex);
+                if (empty($storedByIndex) && $rejected > 0 && empty($orderedExisting)) {
+                    $imageError = 'No valid images. Use JPEG, PNG, WEBP or GIF, max 2MB each.';
+                } elseif ($rejected > 0) {
+                    Session::setFlash('error', $rejected . ' image(s) were skipped: not a supported image type or over 2MB.');
+                }
+            }
+
+            $imageNames = [];
+            $remainingExisting = array_fill_keys($orderedExisting, true);
+            foreach ($submittedOrder as $token) {
+                if (!is_string($token)) {
+                    continue;
+                }
+                if (strncmp($token, 'existing:', 9) === 0) {
+                    $filename = substr($token, 9);
+                    if (isset($remainingExisting[$filename])) {
+                        $imageNames[] = $filename;
+                        unset($remainingExisting[$filename]);
+                    }
+                } elseif (preg_match('/^new:(\d+)$/', $token, $match)) {
+                    $index = (int)$match[1];
+                    if (isset($storedByIndex[$index])) {
+                        $imageNames[] = $storedByIndex[$index];
+                        unset($storedByIndex[$index]);
+                    }
+                }
+            }
+            foreach ($orderedExisting as $filename) {
+                if (isset($remainingExisting[$filename])) {
+                    $imageNames[] = $filename;
+                }
+            }
+            foreach ($storedByIndex as $filename) {
+                if ($galleryManaged) {
+                    $unusedPath = ProductImage::path($id, $filename);
+                    if ($unusedPath !== '' && is_file($unusedPath)) {
+                        @unlink($unusedPath);
+                    }
+                } else {
+                    $imageNames[] = $filename;
+                }
+            }
+            $imageNames = array_slice($imageNames, 0, FileUploader::MAX_IMAGES);
+
+            if ($imageError === null && empty($imageNames)) {
+                $imageError = 'Keep or add at least one product image.';
+            }
+
+            if (empty($errors) && $imageError !== null) {
+                $errors['image'] = $imageError;
+            }
+
+            if (empty($errors)) {
+                try {
+                    $db->query(
+                        "UPDATE products SET category_id = ?, name = ?, slug = ?, description = ?, price = ?, stock = ?, image = ?, status = ? WHERE id = ?",
+                        [$categoryId !== '' ? (int)$categoryId : 0, $name, $slug, $description, (float)$price, $stock, ProductImage::encode($imageNames), $status, $id]
+                    );
+
+                    foreach ($existingImages as $oldImage) {
+                        if (!in_array($oldImage, $imageNames, true)) {
+                            $oldPath = ProductImage::path($id, $oldImage);
+                            if ($oldPath !== '' && is_file($oldPath)) {
+                                @unlink($oldPath);
+                            }
+                        }
+                    }
+
+                    Session::setFlash('success', 'Product updated successfully!');
+                    header('Location: ' . APP_URL . '/admin/products/index.php');
+                    exit;
+                } catch (Throwable $exception) {
+                    foreach ($uploadedImageNames as $uploadedName) {
+                        $uploadedPath = ProductImage::path($id, $uploadedName);
+                        if ($uploadedPath !== '' && is_file($uploadedPath)) {
+                            @unlink($uploadedPath);
+                        }
+                    }
+                    $errors['image'] = 'The product and its images could not be updated. Please try again.';
+                }
             }
         }
     }
 }
 
 $page_title = "Edit Product";
+$page_stylesheets = [ADMIN_ASSETS . '/css/product-image-manager.css'];
 require_once __DIR__ . '/../../includes/admin-header.php';
 ?>
 
@@ -109,7 +214,7 @@ require_once __DIR__ . '/../../includes/admin-header.php';
                     </div>
                 <?php endif; ?>
 
-                <form role="form" action="" method="POST" enctype="multipart/form-data">
+                <form role="form" action="" method="POST" enctype="multipart/form-data" novalidate>
                     <?= Csrf::field() ?>
                     <div class="row">
                         <div class="col-md-6">
@@ -120,8 +225,8 @@ require_once __DIR__ . '/../../includes/admin-header.php';
                         </div>
                         <div class="col-md-6">
                             <div class="input-group input-group-outline mb-3 is-filled">
-                                <label class="form-label">Slug *</label>
-                                <input type="text" class="form-control" name="slug" required value="<?= htmlspecialchars($_POST['slug'] ?? $product['slug']) ?>">
+                                <label class="form-label">Slug (Optional - auto generated)</label>
+                                <input type="text" class="form-control" name="slug" value="<?= htmlspecialchars($_POST['slug'] ?? $product['slug']) ?>">
                             </div>
                         </div>
                     </div>
@@ -155,19 +260,31 @@ require_once __DIR__ . '/../../includes/admin-header.php';
                         <textarea class="form-control" name="description" rows="4" placeholder="Product description..."><?= htmlspecialchars($_POST['description'] ?? $product['description']) ?></textarea>
                     </div>
 
-                    <?php
-                    $currentImageFile = !empty($product['image']) ? basename($product['image']) : '';
-                    if ($currentImageFile !== '' && is_file(BASE_PATH . '/public/uploads/products/' . $currentImageFile)):
-                    ?>
-                        <div class="mb-3">
-                            <label class="form-label text-xs text-secondary d-block">Current Image:</label>
-                            <img src="<?= UPLOADS_URL ?>/products/<?= rawurlencode($currentImageFile) ?>" alt="Product Image" class="border-radius-lg" style="width: 80px; height: 80px; object-fit: cover;">
+                    <?php $currentImages = ProductImage::all($product['image'] ?? null); ?>
+                    <div class="mb-4" data-product-image-manager data-max-images="<?= FileUploader::MAX_IMAGES ?>" data-max-bytes="<?= FileUploader::MAX_BYTES ?>" data-required="true">
+                        <label class="form-label text-dark text-xs font-weight-bold mb-2 d-block">Product Images *</label>
+                        <div class="product-image-dropzone" data-image-dropzone>
+                            <label class="product-image-picker">
+                                Add images
+                                <input type="file" name="images[]" accept="image/jpeg,image/png,image/webp,image/gif" multiple data-image-input>
+                            </label>
+                            <span class="text-xs text-secondary ms-2">JPEG, PNG, WEBP or GIF; up to 2MB each. Move images to change the thumbnail.</span>
+                            <p class="product-image-feedback mb-0" data-image-feedback role="status" aria-live="polite"></p>
+                            <p class="product-image-errors" data-image-errors role="alert"></p>
+                            <div class="product-image-grid" data-image-grid>
+                                <?php foreach ($currentImages as $imageIndex => $currentName): ?>
+                                    <div class="product-image-card" data-token="existing:<?= htmlspecialchars($currentName, ENT_QUOTES) ?>" data-label="Saved image <?= $imageIndex + 1 ?>">
+                                        <img src="<?= htmlspecialchars(ProductImage::url($id, $currentName)) ?>" alt="Product image <?= $imageIndex + 1 ?>">
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                            <input type="hidden" name="image_manager" value="0" data-image-manager-state>
+                            <div data-image-order>
+                                <?php foreach ($currentImages as $currentName): ?>
+                                    <input type="hidden" name="image_order[]" value="existing:<?= htmlspecialchars($currentName, ENT_QUOTES) ?>">
+                                <?php endforeach; ?>
+                            </div>
                         </div>
-                    <?php endif; ?>
-
-                    <div class="mb-3">
-                        <label class="form-label text-xs text-secondary">Replace Image (Max 2MB)</label>
-                        <input type="file" class="form-control border px-2 py-1" name="image" accept="image/*">
                     </div>
 
                     <div class="form-check form-switch ps-0 ms-0 mb-4">
@@ -184,6 +301,7 @@ require_once __DIR__ . '/../../includes/admin-header.php';
     </div>
 </div>
 
+<script src="<?= ADMIN_ASSETS ?>/js/product-image-manager.js"></script>
 <?php
 require_once __DIR__ . '/../../includes/admin-footer.php';
 ?>

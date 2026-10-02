@@ -4,11 +4,12 @@ require_once __DIR__ . '/../../core/Database.php';
 require_once __DIR__ . '/../../core/Session.php';
 require_once __DIR__ . '/../../core/FileUploader.php';
 require_once __DIR__ . '/../../core/Validator.php';
-require_once __DIR__ . '/../../core/Auth.php';
+require_once __DIR__ . '/../../core/AdminAuth.php';
 require_once __DIR__ . '/../../core/Csrf.php';
+require_once __DIR__ . '/../../core/Slug.php';
 
-Session::start();
-Auth::requireAdmin();
+Session::startAdmin();
+AdminAuth::requireAdmin();
 
 $errors = [];
 $name = '';
@@ -23,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = trim($_POST['name'] ?? '');
     $slug = trim($_POST['slug'] ?? '');
     if (empty($slug)) {
-        $slug = strtolower(trim(preg_replace('/[^A-Za-z0-9-]+/', '-', $name), '-'));
+        $slug = Slug::generate($name);
     }
     $status = isset($_POST['status']) ? 1 : 0;
 
@@ -85,7 +86,7 @@ require_once __DIR__ . '/../../includes/admin-header.php';
                     </div>
                 <?php endif; ?>
 
-                <form role="form" action="" method="POST" enctype="multipart/form-data">
+                <form role="form" action="" method="POST" enctype="multipart/form-data" novalidate>
                     <?= Csrf::field() ?>
                     <div class="input-group input-group-outline mb-3 <?= !empty($name) ? 'is-filled' : '' ?>">
                         <label class="form-label">Category Name *</label>

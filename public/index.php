@@ -1,16 +1,80 @@
-﻿<?php
+<?php
 require_once __DIR__ . '/../config/constants.php';
 
 require_once __DIR__ . '/../core/Database.php';
+require_once __DIR__ . '/../core/ProductImage.php';
 
 $db = Database::getInstance();
-$categories = $db->fetchAll("SELECT id, name, slug, image FROM categories WHERE status = ? ORDER BY id ASC LIMIT 6", [1]);
-$homeProducts = $db->fetchAll("SELECT p.id, p.name, p.price, p.stock, p.image, c.name AS category_name, c.slug AS category_slug FROM products p INNER JOIN categories c ON c.id = p.category_id WHERE p.status = 1 AND c.status = 1 ORDER BY p.created_at DESC, p.id DESC LIMIT 12");
+$categories = $db->fetchAll("
+    SELECT c.id, c.name, c.slug, c.image, COUNT(p.id) AS product_count
+    FROM categories c
+    LEFT JOIN products p ON p.category_id = c.id AND p.status = 1
+    WHERE c.status = 1
+    GROUP BY c.id, c.name, c.slug, c.image
+    ORDER BY c.id ASC
+    LIMIT 12
+");
+$homeProducts = $db->fetchAll("SELECT p.id, p.name, p.price, p.stock, p.image, c.name AS category_name, c.slug AS category_slug FROM products p INNER JOIN categories c ON c.id = p.category_id WHERE p.status = 1 AND c.status = 1 ORDER BY p.created_at DESC, p.id DESC LIMIT 15");
+// Best Sellers - real units sold from order history (order_items).
+// Cancelled orders are excluded: a cancellation means the sale never happened
+// (the stock-restore trigger in the schema treats it the same way), so counting
+// them would promote products that were never actually bought.
+$bestSellers = $db->fetchAll("
+    SELECT p.id, p.name, p.price, p.stock, p.image,
+           c.name AS category_name, c.slug AS category_slug,
+           SUM(oi.quantity) AS units_sold
+    FROM order_items oi
+    INNER JOIN orders o ON o.id = oi.order_id
+    INNER JOIN products p ON p.id = oi.product_id
+    INNER JOIN categories c ON c.id = p.category_id
+    WHERE p.status = 1 AND c.status = 1 AND o.order_status <> 'cancelled'
+    GROUP BY p.id, p.name, p.price, p.stock, p.image, c.name, c.slug
+    ORDER BY units_sold DESC, p.price DESC
+    LIMIT 10
+");
+
+// Almost Gone - low-stock clearance (stock column, no discount column needed)
+$almostGone = $db->fetchAll("
+    SELECT p.id, p.name, p.price, p.stock, p.image,
+           c.name AS category_name, c.slug AS category_slug
+    FROM products p
+    INNER JOIN categories c ON c.id = p.category_id
+    WHERE p.status = 1 AND c.status = 1 AND p.stock <= 5
+    ORDER BY p.stock ASC, p.created_at DESC
+    LIMIT 10
+");
+
+// Shop-by-price bands (aligned with the shop sidebar ranges)
+$priceBands = $db->fetchOne("
+    SELECT
+      SUM(price < 100) AS band1,
+      SUM(price >= 100 AND price < 500) AS band2,
+      SUM(price >= 500 AND price < 1000) AS band3,
+      SUM(price >= 1000) AS band4
+    FROM products WHERE status = 1
+") ?? [];
+
+// Store stats strip
+$storeStats = $db->fetchOne("
+    SELECT
+      (SELECT COUNT(*) FROM products WHERE status = 1) AS products,
+      (SELECT COUNT(*) FROM categories WHERE status = 1) AS categories,
+      (SELECT COALESCE(SUM(oi.quantity), 0) FROM order_items oi
+         JOIN orders o ON o.id = oi.order_id
+        WHERE o.order_status <> 'cancelled') AS items_sold,
+      (SELECT COUNT(DISTINCT user_id) FROM orders
+        WHERE order_status <> 'cancelled') AS buyers
+") ?? [];
+
 $placeholderImage = 'https://placehold.co/600x600?text=Product';
 $placeholderCategoryImage = 'https://placehold.co/300x220?text=Category';
 
 
 $page_title = "Molla - Electronic Store (Demo 4)";
+$page_stylesheets = [
+    FRONT_ASSETS . '/css/storefront-layout.css?v=' . filemtime(BASE_PATH . '/public/assets/front/css/storefront-layout.css'),
+    FRONT_ASSETS . '/css/home-arrivals.css?v=' . filemtime(BASE_PATH . '/public/assets/front/css/home-arrivals.css')
+];
 
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/navbar.php';
@@ -170,6 +234,34 @@ require_once __DIR__ . '/../includes/navbar.php';
                     </div><!-- End .row -->
                 </div><!-- End .cat-blocks-container -->
             </div><!-- End .container -->
+
+            <!-- Store stats strip -->
+            <div class="store-stats bg-light pt-5 pb-5">
+                <div class="container">
+                    <div class="row text-center">
+                        <div class="col-6 col-md-3 mb-4 mb-md-0">
+                            <span class="store-stat-icon"><i class="la la-cube"></i></span>
+                            <h3 class="store-stat-value"><?= (int)($storeStats['products'] ?? 0) ?></h3>
+                            <p class="store-stat-label">Products</p>
+                        </div>
+                        <div class="col-6 col-md-3 mb-4 mb-md-0">
+                            <span class="store-stat-icon"><i class="la la-th-large"></i></span>
+                            <h3 class="store-stat-value"><?= (int)($storeStats['categories'] ?? 0) ?></h3>
+                            <p class="store-stat-label">Categories</p>
+                        </div>
+                        <div class="col-6 col-md-3 mb-4 mb-md-0">
+                            <span class="store-stat-icon"><i class="la la-shopping-cart"></i></span>
+                            <h3 class="store-stat-value"><?= (int)($storeStats['items_sold'] ?? 0) ?></h3>
+                            <p class="store-stat-label">Items Sold</p>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <span class="store-stat-icon"><i class="la la-users"></i></span>
+                            <h3 class="store-stat-value"><?= (int)($storeStats['buyers'] ?? 0) ?></h3>
+                            <p class="store-stat-label">Happy Buyers</p>
+                        </div>
+                    </div>
+                </div>
+            </div><!-- End .store-stats -->
 
             <div class="mb-4"></div><!-- End .mb-4 -->
 
@@ -1545,7 +1637,8 @@ require_once __DIR__ . '/../includes/navbar.php';
                     <?php foreach ($homeProducts as $product): ?>
                         <div class="product product-2">
                             <figure class="product-media">
-                                <?php $productImage = !empty($product['image']) && is_file(BASE_PATH . '/public/uploads/products/' . basename($product['image'])) ? UPLOADS_URL . '/products/' . rawurlencode(basename($product['image'])) : $placeholderImage; ?>
+                                <?php $productImages = ProductImage::available((int)$product['id'], $product['image'] ?? null); ?>
+                                <?php $productImage = !empty($productImages) ? ProductImage::url((int)$product['id'], $productImages[0]) : $placeholderImage; ?>
                                 <a href="<?= FRONT_URL ?>/product.php?id=<?= (int)$product['id'] ?>"><img src="<?= htmlspecialchars($productImage) ?>" alt="<?= htmlspecialchars($product['name']) ?>" class="product-image"></a>
                                 <div class="product-action-vertical"><a href="#" class="btn-product-icon btn-wishlist" title="Add to wishlist"></a></div>
                                 <div class="product-action">
@@ -1566,6 +1659,128 @@ require_once __DIR__ . '/../includes/navbar.php';
 
             <div class="mb-6"></div><!-- End .mb-6 -->
 
+            <!-- Best Sellers (units sold from order history) -->
+            <?php if (!empty($bestSellers)): ?>
+            <div class="container new-arrivals">
+                <div class="heading heading-flex mb-3">
+                    <div class="heading-left"><h2 class="title">Best Sellers</h2></div>
+                    <div class="heading-right"><a href="<?= FRONT_URL ?>/shop.php" class="title-link">Shop all products<i class="icon-long-arrow-right"></i></a></div>
+                </div>
+                <div class="owl-carousel owl-full carousel-equal-height carousel-with-shadow" data-toggle="owl" data-owl-options='{"nav":true,"dots":true,"margin":20,"loop":false,"responsive":{"0":{"items":2},"480":{"items":2},"768":{"items":3},"992":{"items":4},"1200":{"items":5}}}'>
+                    <?php foreach ($bestSellers as $item):
+                        $cardProduct = $item;
+                        $cardPlaceholder = $placeholderImage;
+                        $cardBadge = 'Best Seller';
+                        $cardBadgeClass = 'label-top';
+                        $cardMetaText = (int)$item['units_sold'] . ' sold';
+                        $cardMetaWidth = 100;
+                        include __DIR__ . '/../includes/product-card.php';
+                    endforeach; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <div class="mb-6"></div><!-- End .mb-6 -->
+
+            <!-- Shop by Price -->
+            <?php
+            // Tier definitions: tier, label, default badge, icon, min_price,
+            // max_price (EXCLUSIVE upper bound), live product count.
+            $priceTiles = [
+                ['1', 'Under $100',          'Budget',    'la-tag',     '',    100,  (int)($priceBands['band1'] ?? 0)],
+                ['2', '$100 &ndash; $500',   'Mid-Range', 'la-tags',    100,   500,  (int)($priceBands['band2'] ?? 0)],
+                ['3', '$500 &ndash; $1,000', 'High-End',  'la-diamond', 500,   1000, (int)($priceBands['band3'] ?? 0)],
+                ['4', '$1,000 &amp; Above',  'Luxury',    'la-star',    1000,  '',    (int)($priceBands['band4'] ?? 0)],
+            ];
+
+            // Hide ranges that have no products so we never render a dead tile.
+            $priceTiles = array_values(array_filter(
+                $priceTiles,
+                static fn(array $tile): bool => $tile[6] > 0
+            ));
+
+            // "Most Popular" is derived from the live counts rather than being
+            // hard-coded to one fixed tier (only when 2+ ranges are shown).
+            $topTier  = null;
+            $topCount = 0;
+            if (count($priceTiles) > 1) {
+                foreach ($priceTiles as $tile) {
+                    if ($tile[6] > $topCount) {
+                        $topCount = $tile[6];
+                        $topTier  = $tile[0];
+                    }
+                }
+            }
+            ?>
+            <?php if (!empty($priceTiles)): ?>
+            <div class="container shop-by-price-section">
+                <div class="heading heading-flex mb-4">
+                    <div class="heading-left">
+                        <span class="section-badge text-primary mb-1 d-block font-weight-bold text-uppercase" style="font-size: 1.1rem; letter-spacing: .1em;">Budget Ranges</span>
+                        <h2 class="title mb-0">Shop by Price</h2>
+                        <p class="title-desc mb-0 text-muted">Find the right gear tailored to your exact budget</p>
+                    </div>
+                    <div class="heading-right"><a href="<?= FRONT_URL ?>/shop.php" class="title-link">Explore all products <i class="icon-long-arrow-right"></i></a></div>
+                </div>
+                <div class="row">
+                    <?php foreach ($priceTiles as $tile):
+                        [$tier, $tileLabel, $tileBadge, $tileIcon, $tileMin, $tileMax, $tileCount] = $tile;
+                        if ($tier === $topTier) {
+                            $tileBadge = 'Most Popular';
+                        }
+                        // Exclusive upper bound so a tile's count always matches the
+                        // number of products its link actually returns.
+                        $tileQuery = [];
+                        if ($tileMin !== '') { $tileQuery['min_price'] = $tileMin; }
+                        if ($tileMax !== '') { $tileQuery['max_price_ex'] = $tileMax; }
+                        $tileUrl = FRONT_URL . '/shop.php' . (!empty($tileQuery) ? '?' . http_build_query($tileQuery) : '');
+                    ?>
+                        <div class="col-6 col-lg-3 mb-4 mb-lg-0">
+                            <a class="price-band price-band--<?= $tier ?>" href="<?= htmlspecialchars($tileUrl) ?>">
+                                <div class="price-band-top">
+                                    <span class="price-band-badge"><?= $tileBadge ?></span>
+                                    <span class="price-band-icon"><i class="la <?= $tileIcon ?>"></i></span>
+                                </div>
+                                <div class="price-band-body">
+                                    <span class="price-band-range"><?= $tileLabel ?></span>
+                                    <span class="price-band-desc">Browse gear in this bracket</span>
+                                </div>
+                                <div class="price-band-footer">
+                                    <span class="price-band-count"><i class="la la-cube me-1"></i><?= $tileCount ?> item<?= $tileCount === 1 ? '' : 's' ?></span>
+                                    <span class="price-band-arrow"><i class="icon-long-arrow-right"></i></span>
+                                </div>
+                            </a>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+
+            <div class="mb-6"></div><!-- End .mb-6 -->
+            <?php endif; ?>
+
+            <!-- Almost Gone (low-stock clearance) -->
+            <?php if (!empty($almostGone)): ?>
+            <div class="container new-arrivals">
+                <div class="heading heading-flex mb-3">
+                    <div class="heading-left"><h2 class="title">Almost Gone</h2></div>
+                    <div class="heading-right"><a href="<?= FRONT_URL ?>/shop.php" class="title-link">Grab them before they sell out<i class="icon-long-arrow-right"></i></a></div>
+                </div>
+                <div class="owl-carousel owl-full carousel-equal-height carousel-with-shadow" data-toggle="owl" data-owl-options='{"nav":true,"dots":true,"margin":20,"loop":false,"responsive":{"0":{"items":2},"480":{"items":2},"768":{"items":3},"992":{"items":4},"1200":{"items":5}}}'>
+                    <?php foreach ($almostGone as $item):
+                        $cardProduct = $item;
+                        $cardPlaceholder = $placeholderImage;
+                        $cardBadge = (int)$item['stock'] > 0 ? 'Only ' . (int)$item['stock'] . ' left' : 'Sold out';
+                        $cardBadgeClass = 'label-sale';
+                        $cardMetaText = (int)$item['stock'] > 0 ? (int)$item['stock'] . ' left in stock' : 'Out of stock';
+                        $cardMetaWidth = 100;
+                        include __DIR__ . '/../includes/product-card.php';
+                    endforeach; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <div class="mb-6"></div><!-- End .mb-6 -->
+
             <div class="container">
                 <div class="cta cta-border mb-5" style="background-image: url(<?= FRONT_ASSETS ?>/images/demos/demo-4/bg-1.jpg);">
                     <img src="<?= FRONT_ASSETS ?>/images/demos/demo-4/camera.png" alt="camera" class="cta-img">
@@ -1573,9 +1788,9 @@ require_once __DIR__ . '/../includes/navbar.php';
                         <div class="col-md-12">
                             <div class="cta-content">
                                 <div class="cta-text text-right text-white">
-                                    <p>Shop TodayΓÇÖs Deals <br><strong>Awesome Made Easy. HERO7 Black</strong></p>
+                                    <p>Shop Today&rsquo;s Deals <br><strong>Awesome Made Easy. HERO7 Black</strong></p>
                                 </div><!-- End .cta-text -->
-                                <a href="#" class="btn btn-primary btn-round"><span>Shop Now - $429.99</span><i class="icon-long-arrow-right"></i></a>
+                                <a href="<?= FRONT_URL ?>/shop.php" class="btn btn-primary btn-round"><span>Shop Now</span><i class="icon-long-arrow-right"></i></a>
                             </div><!-- End .cta-content -->
                         </div><!-- End .col-md-12 -->
                     </div><!-- End .row -->
@@ -1586,7 +1801,7 @@ require_once __DIR__ . '/../includes/navbar.php';
             <div class="container">
                 <div class="heading text-center mb-3">
                     <h2 class="title">Deals & Outlet</h2><!-- End .title -->
-                    <p class="title-desc">TodayΓÇÖs deal and more</p><!-- End .title-desc -->
+                    <p class="title-desc">Today&rsquo;s deal and more</p><!-- End .title-desc -->
                 </div><!-- End .heading -->
 
                 <div class="row">
@@ -1670,34 +1885,34 @@ require_once __DIR__ . '/../includes/navbar.php';
                             }
                         }
                     }'>
-                    <a href="#" class="brand">
+                    <a href="<?= FRONT_URL ?>/shop.php" class="brand">
                         <img src="<?= FRONT_ASSETS ?>/images/brands/1.png" alt="Brand Name">
                     </a>
 
-                    <a href="#" class="brand">
+                    <a href="<?= FRONT_URL ?>/shop.php" class="brand">
                         <img src="<?= FRONT_ASSETS ?>/images/brands/2.png" alt="Brand Name">
                     </a>
 
-                    <a href="#" class="brand">
+                    <a href="<?= FRONT_URL ?>/shop.php" class="brand">
                         <img src="<?= FRONT_ASSETS ?>/images/brands/3.png" alt="Brand Name">
                     </a>
 
-                    <a href="#" class="brand">
+                    <a href="<?= FRONT_URL ?>/shop.php" class="brand">
                         <img src="<?= FRONT_ASSETS ?>/images/brands/4.png" alt="Brand Name">
                     </a>
 
-                    <a href="#" class="brand">
+                    <a href="<?= FRONT_URL ?>/shop.php" class="brand">
                         <img src="<?= FRONT_ASSETS ?>/images/brands/5.png" alt="Brand Name">
                     </a>
 
-                    <a href="#" class="brand">
+                    <a href="<?= FRONT_URL ?>/shop.php" class="brand">
                         <img src="<?= FRONT_ASSETS ?>/images/brands/6.png" alt="Brand Name">
                     </a>
                 </div><!-- End .owl-carousel -->
             </div><!-- End .container -->
 
+            <?php if (false): ?>
             <div class="bg-light pt-5 pb-6">
-                <?php if (false): ?>
                 <div class="container trending-products">
                     <div class="heading heading-flex mb-3">
                         <div class="heading-left">
@@ -2328,10 +2543,8 @@ require_once __DIR__ . '/../includes/navbar.php';
                         </div><!-- End .col-xl-4-5col -->
                     </div><!-- End .row -->
                 </div><!-- End .container -->
-                <?php endif; ?>
             </div><!-- End .bg-light pt-5 pb-6 -->
-
-            <div class="mb-5"></div><!-- End .mb-5 -->
+            <?php endif; ?>
 
             <?php if (false): ?>
             <div class="container for-you">

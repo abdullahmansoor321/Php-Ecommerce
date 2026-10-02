@@ -5,6 +5,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 // Fetch categories and cart items dynamically
+require_once __DIR__ . '/../core/ProductImage.php';
 $nav_categories = [];
 $nav_cart_items = [];
 $nav_cart_total = 0.0;
@@ -108,12 +109,11 @@ try {
                                         <p class="text-center py-2 text-muted mb-0">No products in cart.</p>
                                     <?php else: ?>
                                         <?php foreach ($nav_cart_items as $ci): ?>
-                                            <?php 
-                                            $ciImg = !empty($ci['image']) ? $ci['image'] : 'product-1.jpg';
-                                            $ciPath = (strpos($ciImg, 'http') === 0) ? $ciImg : FRONT_ASSETS . '/images/demos/demo-4/products/' . $ciImg;
-                                            if (!file_exists(BASE_PATH . '/public/assets/front/images/demos/demo-4/products/' . basename($ciImg))) {
-                                                $ciPath = FRONT_ASSETS . '/images/demos/demo-4/products/product-1.jpg';
-                                            }
+                                            <?php
+                                            $ciImages = ProductImage::available((int)$ci['product_id'], $ci['image'] ?? null);
+                                            $ciPath = !empty($ciImages)
+                                                ? ProductImage::url((int)$ci['product_id'], $ciImages[0])
+                                                : FRONT_ASSETS . '/images/demos/demo-4/products/product-1.jpg';
                                             ?>
                                             <div class="product">
                                                 <div class="product-cart-details">
@@ -127,7 +127,7 @@ try {
                                                 </div>
                                                 <figure class="product-image-container">
                                                     <a href="<?= FRONT_URL ?>/product.php?id=<?= $ci['product_id'] ?>" class="product-image">
-                                                        <img src="<?= htmlspecialchars($ciPath) ?>" alt="product">
+                                                        <img src="<?= htmlspecialchars($ciPath) ?>" alt="<?= htmlspecialchars($ci['name']) ?>">
                                                     </a>
                                                 </figure>
                                                 <a href="<?= FRONT_URL ?>/cart.php?action=remove&id=<?= $ci['product_id'] ?>" class="btn-remove" title="Remove Product"><i class="icon-close"></i></a>

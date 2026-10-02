@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../config/constants.php';
 require_once __DIR__ . '/../core/Session.php';
 require_once __DIR__ . '/../core/Cart.php';
+require_once __DIR__ . '/../core/ProductImage.php';
 
 Session::start();
 
@@ -11,7 +12,39 @@ $productId = (int)($_GET['id'] ?? $_POST['product_id'] ?? 0);
 
 if ($action === 'add' && $productId > 0) {
 	$qty = max(1, (int)($_GET['qty'] ?? $_POST['qty'] ?? $_POST['quantity'] ?? 1));
-    Cart::add($productId, $qty);
+	$added = Cart::add($productId, $qty);
+
+	if (strtolower($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'xmlhttprequest') {
+		$cartItems = Cart::getItems();
+		$cartCount = array_sum(array_map(static function ($item) {
+			return (int)$item['quantity'];
+		}, $cartItems));
+		$responseItems = array_map(static function ($item) {
+			$images = ProductImage::available((int)$item['product_id'], $item['image'] ?? null);
+			return [
+				'product_id' => (int)$item['product_id'],
+				'name' => (string)$item['name'],
+				'quantity' => (int)$item['quantity'],
+				'price' => (float)$item['price'],
+				'image' => !empty($images)
+					? ProductImage::url((int)$item['product_id'], $images[0])
+					: FRONT_ASSETS . '/images/demos/demo-4/products/product-1.jpg',
+			];
+		}, $cartItems);
+
+		if (!$added) {
+			http_response_code(409);
+		}
+		header('Content-Type: application/json; charset=utf-8');
+		echo json_encode([
+			'success' => $added,
+			'count' => $cartCount,
+			'total' => Cart::getTotal(),
+			'items' => $responseItems,
+		], JSON_INVALID_UTF8_SUBSTITUTE);
+		exit;
+	}
+
     header('Location: ' . FRONT_URL . '/cart.php');
     exit;
 }
@@ -90,10 +123,10 @@ require_once __DIR__ . '/../includes/navbar.php';
                                                 </tr>
                                             <?php else: ?>
                                                 <?php foreach ($cartItems as $item): ?>
-                                                    <?php 
-													$itemImg = basename((string)($item['image'] ?? ''));
-													$imgPath = $itemImg !== '' && is_file(BASE_PATH . '/public/uploads/products/' . $itemImg)
-														? UPLOADS_URL . '/products/' . rawurlencode($itemImg)
+                                                    <?php
+													$itemImages = ProductImage::available((int)$item['product_id'], $item['image'] ?? null);
+													$imgPath = !empty($itemImages)
+														? ProductImage::url((int)$item['product_id'], $itemImages[0])
 														: 'https://placehold.co/120x120?text=Product';
                                                     $itemSubtotal = (float)$item['price'] * (int)$item['quantity'];
                                                     ?>

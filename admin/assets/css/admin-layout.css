@@ -1,0 +1,45 @@
+/* ==========================================================================
+   Admin layout polish
+   Loaded after material-dashboard.css. Keeps the admin shell comfortable to
+   look at and stops the footer from floating in the middle of short pages.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Sticky footer
+   --------------------------------------------------------------------------
+   The theme puts .h-100 / .max-height-vh-100 on <main class="main-content">
+   and lets the footer sit directly under the content, so short pages (Users,
+   Reports, forms, ...) leave an empty grey void beneath the footer. Neutralise
+   those utilities, make the content column a full-height flex column and push
+   the footer to the bottom with margin-top:auto. Tall pages are unaffected.
+   -------------------------------------------------------------------------- */
+body.g-sidenav-show {
+    min-height: 100vh;
+}
+
+main.main-content {
+    display: flex;
+    flex-direction: column;
+    height: auto !important;      /* override .h-100 */
+    max-height: none !important;  /* override .max-height-vh-100 */
+    min-height: 100vh;
+}
+
+main.main-content > .container-fluid {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+}
+
+main.main-content > .container-fluid > .footer {
+    margin-top: auto;
+}
+
+/* --------------------------------------------------------------------------
+   2. Breathing room between stacked dashboard rows
+   --------------------------------------------------------------------------
+   Metric rows previously stacked flush because every column carried
+   .mb-xl-0 (zero bottom margin at >=1200px). That class has been removed from
+   admin/index.php and admin/reports.php, so the theme's own .mb-4 on each
+   column now provides a consistent gap between rows on every breakpoint.
+   -------------------------------------------------------------------------- */

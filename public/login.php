@@ -27,6 +27,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 			} else {
 				require_once __DIR__ . '/../core/Cart.php';
 				Cart::mergeGuestCart($_SESSION['user_id']);
+				// Drop any flash set before signing in; it has served its
+				// purpose and must not reappear on the next page.
+				unset($_SESSION['flash']);
 				header('Location: ' . FRONT_URL . '/index.php');
 				exit;
 			}
@@ -51,6 +54,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 		if (empty($errors)) {
 			if (Auth::register($name, $email, $password)) {
+				// Log the new account in immediately so the user does not have
+				// to sign in again right after registering.
+				if (Auth::login($email, $password) && !Auth::isAdmin()) {
+					require_once __DIR__ . '/../core/Cart.php';
+					Cart::mergeGuestCart($_SESSION['user_id']);
+					unset($_SESSION['flash']);
+					Session::setFlash('success', 'Welcome, ' . $name . '! Your account has been created.');
+					header('Location: ' . FRONT_URL . '/index.php');
+					exit;
+				}
+
 				Session::setFlash('success', 'Registration successful. You can now sign in.');
 				header('Location: ' . FRONT_URL . '/login.php');
 				exit;
@@ -82,6 +96,18 @@ require_once __DIR__ . '/../includes/navbar.php';
             			<div class="form-tab">
 				<?php if ($success = Session::getFlash('success')): ?>
 					<div class="alert alert-success" role="alert"><?= htmlspecialchars($success) ?></div>
+				<?php endif; ?>
+				<?php
+				/*
+				 * Drain any pending error flash. Reading it here stops a stale
+				 * message (e.g. "Please sign in to proceed with checkout." left
+				 * over from an earlier redirect) from lingering in the session
+				 * and resurfacing on a later page such as checkout.php.
+				 */
+				$flashError = Session::getFlash('error');
+				?>
+				<?php if ($flashError): ?>
+					<div class="alert alert-warning" role="alert"><?= htmlspecialchars($flashError) ?></div>
 				<?php endif; ?>
 				<?php if (!empty($errors)): ?>
 					<div class="alert alert-danger" role="alert">

@@ -4,11 +4,12 @@ require_once __DIR__ . '/../../core/Database.php';
 require_once __DIR__ . '/../../core/Session.php';
 require_once __DIR__ . '/../../core/FileUploader.php';
 require_once __DIR__ . '/../../core/Validator.php';
-require_once __DIR__ . '/../../core/Auth.php';
+require_once __DIR__ . '/../../core/AdminAuth.php';
 require_once __DIR__ . '/../../core/Csrf.php';
+require_once __DIR__ . '/../../core/Slug.php';
 
-Session::start();
-Auth::requireAdmin();
+Session::startAdmin();
+AdminAuth::requireAdmin();
 
 $db = Database::getInstance();
 $id = (int)($_GET['id'] ?? 0);
@@ -30,6 +31,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $name = trim($_POST['name'] ?? '');
     $slug = trim($_POST['slug'] ?? '');
+    if (empty($slug)) {
+        $slug = Slug::generate($name);
+    }
     $status = isset($_POST['status']) ? 1 : 0;
 
     $validator = new Validator(['name' => $name, 'slug' => $slug]);
@@ -93,7 +97,7 @@ require_once __DIR__ . '/../../includes/admin-header.php';
                     </div>
                 <?php endif; ?>
 
-                <form role="form" action="" method="POST" enctype="multipart/form-data">
+                <form role="form" action="" method="POST" enctype="multipart/form-data" novalidate>
                     <?= Csrf::field() ?>
                     <div class="input-group input-group-outline mb-3 is-filled">
                         <label class="form-label">Category Name *</label>
@@ -101,8 +105,8 @@ require_once __DIR__ . '/../../includes/admin-header.php';
                     </div>
 
                     <div class="input-group input-group-outline mb-3 is-filled">
-                        <label class="form-label">Slug *</label>
-                        <input type="text" class="form-control" name="slug" required value="<?= htmlspecialchars($_POST['slug'] ?? $category['slug']) ?>">
+                        <label class="form-label">Slug (Optional - auto generated)</label>
+                        <input type="text" class="form-control" name="slug" value="<?= htmlspecialchars($_POST['slug'] ?? $category['slug']) ?>">
                     </div>
 
                     <?php

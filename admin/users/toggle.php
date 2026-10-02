@@ -2,11 +2,11 @@
 require_once __DIR__ . '/../../config/constants.php';
 require_once __DIR__ . '/../../core/Database.php';
 require_once __DIR__ . '/../../core/Session.php';
-require_once __DIR__ . '/../../core/Auth.php';
+require_once __DIR__ . '/../../core/AdminAuth.php';
 require_once __DIR__ . '/../../core/Csrf.php';
 
-Session::start();
-Auth::requireAdmin();
+Session::startAdmin();
+AdminAuth::requireAdmin();
 
 $db = Database::getInstance();
 $id = (int)($_POST['id'] ?? 0);
@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !Csrf::verify($_POST['csrf_token'] 
 }
 
 // Prevent admin from deactivating themselves
-if ($id === (int)$_SESSION['user_id']) {
+if ($id === (int)$_SESSION['admin_user_id']) {
     Session::setFlash('error', 'You cannot deactivate your own active admin account.');
     header('Location: ' . APP_URL . '/admin/users/index.php');
     exit;

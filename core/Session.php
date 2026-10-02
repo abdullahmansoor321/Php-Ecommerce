@@ -2,11 +2,31 @@
 
 class Session
 {
+    /** Name of the cookie holding the admin panel's session. */
+    public const ADMIN_NAME = 'ADMINSESSID';
+
     public static function start(): void
     {
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
         }
+    }
+
+    /**
+     * Start a session isolated from the storefront.
+     *
+     * Uses its own cookie name, so an admin and a customer can be signed in
+     * simultaneously in the same browser. The name must be set before
+     * session_start(), hence the separate entry point.
+     */
+    public static function startAdmin(): void
+    {
+        if (session_status() !== PHP_SESSION_NONE) {
+            return;
+        }
+
+        session_name(self::ADMIN_NAME);
+        session_start();
     }
 
     public static function set(string $key, mixed $value): void

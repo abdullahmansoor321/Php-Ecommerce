@@ -1,0 +1,289 @@
+.new-arrivals .product.product-2 {
+    display: flex;
+    flex-direction: column;
+}
+
+.new-arrivals .product.product-2 .product-media {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1;
+    overflow: hidden;
+    background: #fff;
+}
+
+.new-arrivals .product.product-2 .product-media > a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+.new-arrivals .product.product-2 .product-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.new-arrivals .product.product-2 .product-body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    padding: 1.4rem 1.2rem 1rem;
+}
+
+.new-arrivals .product.product-2 .product-cat {
+    min-height: 1.5em;
+}
+
+.new-arrivals .product.product-2 .product-title {
+    display: -webkit-box;
+    min-height: 2.5em;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-height: 1.25;
+    margin: 0 0 .5rem;
+}
+
+.new-arrivals .product.product-2 .ratings-container {
+    flex-wrap: wrap;
+    column-gap: .7rem;
+    row-gap: .5rem;
+    margin-top: auto;
+    white-space: normal;
+}
+
+@media (max-width: 575.98px) {
+    .new-arrivals .product.product-2 .product-body {
+        padding: 1rem .8rem .8rem;
+    }
+
+    .new-arrivals .product.product-2 .product-title {
+        font-size: 1.4rem;
+    }
+}
+
+/* ------------------------------------------------------------------
+   Home page additions
+   Best Sellers / Almost Gone reuse .new-arrivals card styles above.
+   ------------------------------------------------------------------ */
+
+/* Store stats strip */
+.store-stats {
+    border-top: 1px solid #ebebeb;
+    border-bottom: 1px solid #ebebeb;
+}
+
+.store-stat-icon {
+    display: block;
+    font-size: 2.8rem;
+    line-height: 1;
+    color: #c96;
+    margin-bottom: 1rem;
+}
+
+.store-stat-value {
+    font-size: 3.2rem;
+    font-weight: 600;
+    color: #333;
+    line-height: 1;
+    margin: 0 0 .6rem;
+}
+
+.store-stat-label {
+    font-size: 1.3rem;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: #999;
+    margin: 0;
+}
+
+/* ---- Shop by price: premium tier cards --------------------------------- */
+.shop-by-price-section {
+    padding: 1rem 0;
+}
+
+.price-band {
+    --band-accent: #0ea5e9;
+    --band-soft: #e0f2fe;
+    --band-gradient: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 100%;
+    padding: 2.4rem;
+    background: var(--band-gradient);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 1rem;
+    overflow: hidden;
+    text-decoration: none !important;
+    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+}
+
+/* Price ladder: distinct vibrant modern palettes */
+.price-band--1 { --band-accent: #0ea5e9; --band-soft: #e0f2fe; --band-gradient: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); }
+.price-band--2 { --band-accent: #8b5cf6; --band-soft: #ede9fe; --band-gradient: linear-gradient(135deg, #fdf4ff 0%, #ede9fe 100%); }
+.price-band--3 { --band-accent: #f59e0b; --band-soft: #fef3c7; --band-gradient: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); }
+.price-band--4 { --band-accent: #e11d48; --band-soft: #ffe4e6; --band-gradient: linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%); }
+
+/* Decorative background watermark icon / glow */
+.price-band::after {
+    content: "";
+    position: absolute;
+    bottom: -20px;
+    right: -20px;
+    width: 10rem;
+    height: 10rem;
+    border-radius: 50%;
+    background: var(--band-accent);
+    opacity: 0.04;
+    transition: transform 0.4s ease, opacity 0.4s ease;
+    pointer-events: none;
+}
+
+.price-band:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.08);
+    border-color: var(--band-accent);
+}
+
+.price-band:hover::after {
+    transform: scale(1.3);
+    opacity: 0.08;
+}
+
+.price-band-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.8rem;
+}
+
+.price-band-badge {
+    display: inline-block;
+    padding: 0.3rem 0.9rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--band-accent);
+    background: #fff;
+    border-radius: 2rem;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.price-band-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 4.2rem;
+    height: 4.2rem;
+    border-radius: 50%;
+    font-size: 2rem;
+    color: var(--band-accent);
+    background: #fff;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+}
+
+.price-band:hover .price-band-icon {
+    background: var(--band-accent);
+    color: #fff;
+    transform: scale(1.08) rotate(5deg);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+.price-band-body {
+    margin-bottom: 2rem;
+}
+
+.price-band-range {
+    display: block;
+    font-size: 2rem;
+    font-weight: 700;
+    color: #1e293b;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.4rem;
+    transition: color 0.2s ease;
+}
+
+.price-band:hover .price-band-range {
+    color: var(--band-accent);
+}
+
+.price-band-desc {
+    display: block;
+    font-size: 1.25rem;
+    color: #64748b;
+}
+
+.price-band-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 1.4rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.price-band-count {
+    font-size: 1.25rem;
+    font-weight: 500;
+    color: #475569;
+}
+
+.price-band-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.8rem;
+    height: 2.8rem;
+    border-radius: 50%;
+    background: #fff;
+    color: #64748b;
+    font-size: 1.1rem;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+    transition: all 0.3s ease;
+}
+
+.price-band:hover .price-band-arrow {
+    background: var(--band-accent);
+    color: #fff;
+    transform: translateX(4px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+@media (max-width: 991.98px) {
+    .price-band {
+        padding: 2rem;
+    }
+    .price-band-range {
+        font-size: 1.8rem;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .price-band {
+        padding: 1.6rem;
+    }
+    .price-band-range {
+        font-size: 1.6rem;
+    }
+    .price-band-icon {
+        width: 3.6rem;
+        height: 3.6rem;
+        font-size: 1.7rem;
+    }
+}
+
+/* Category product count */
+.cat-block-count {
+    color: #bbb;
+    font-size: .8em;
+    font-weight: 300;
+}

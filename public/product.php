@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../config/constants.php';
 require_once __DIR__ . '/../core/Database.php';
+require_once __DIR__ . '/../core/ProductImage.php';
 
 $productId = (int)($_GET['id'] ?? 0);
 $db = Database::getInstance();
@@ -18,8 +19,16 @@ if (!$product) {
 }
 
 $placeholderImage = 'https://placehold.co/600x600?text=Product';
-$productImage = !empty($product['image']) && is_file(BASE_PATH . '/public/uploads/products/' . basename($product['image'])) ? UPLOADS_URL . '/products/' . rawurlencode(basename($product['image'])) : $placeholderImage;
+$productImages = ProductImage::available((int)$product['id'], $product['image'] ?? null);
+$productImageUrls = array_map(function ($filename) use ($product) {
+    return ProductImage::url((int)$product['id'], $filename);
+}, $productImages);
+if (empty($productImageUrls)) {
+    $productImageUrls = [$placeholderImage];
+}
+$productImage = $productImageUrls[0];
 $page_title = htmlspecialchars($product['name']) . " - Product Details";
+$page_stylesheets = [FRONT_ASSETS . '/css/product-gallery.css'];
 $productDescription = !empty($product['description']) ? $product['description'] : 'Product details are currently unavailable.';
 $productStock = (int)$product['stock'];
 
@@ -54,29 +63,20 @@ require_once __DIR__ . '/../includes/navbar.php';
                                          data-zoom-image="<?= htmlspecialchars($productImage) ?>" 
                                          alt="<?= htmlspecialchars($product['name']) ?>">
 
-                                    <a href="#" id="btn-product-gallery" class="btn-product-gallery">
+                                    <a href="#" id="btn-product-gallery" class="btn-product-gallery" aria-label="View product image gallery">
                                         <i class="icon-arrows"></i>
                                     </a>
                                 </figure>
 
                                 <div id="product-zoom-gallery" class="product-image-gallery">
-                                                <a class="product-gallery-item active" href="#" 
-                                                    data-image="<?= htmlspecialchars($productImage) ?>" 
-                                                    data-zoom-image="<?= htmlspecialchars($productImage) ?>">
-                                                     <img src="<?= htmlspecialchars($productImage) ?>" alt="<?= htmlspecialchars($product['name']) ?>">
-                                    </a>
-
-                                    <a class="product-gallery-item" href="#" 
-                                                    data-image="<?= htmlspecialchars($productImage) ?>" 
-                                                    data-zoom-image="<?= htmlspecialchars($productImage) ?>">
-                                                     <img src="<?= htmlspecialchars($productImage) ?>" alt="<?= htmlspecialchars($product['name']) ?>">
-                                    </a>
-
-                                    <a class="product-gallery-item" href="#" 
-                                                    data-image="<?= htmlspecialchars($productImage) ?>" 
-                                                    data-zoom-image="<?= htmlspecialchars($productImage) ?>">
-                                                     <img src="<?= htmlspecialchars($productImage) ?>" alt="<?= htmlspecialchars($product['name']) ?>">
-                                    </a>
+                                    <?php foreach ($productImageUrls as $imageIndex => $imageUrl): ?>
+                                        <a class="product-gallery-item <?= $imageIndex === 0 ? 'active' : '' ?>" href="#"
+                                           data-image="<?= htmlspecialchars($imageUrl) ?>"
+                                                         data-zoom-image="<?= htmlspecialchars($imageUrl) ?>"
+                                                         <?= $imageIndex === 0 ? 'aria-current="true"' : '' ?>>
+                                            <img src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars($product['name']) ?> image <?= $imageIndex + 1 ?>">
+                                        </a>
+                                    <?php endforeach; ?>
                                 </div>
                             </div>
                         </div>
@@ -342,7 +342,7 @@ require_once __DIR__ . '/../includes/navbar.php';
     </div>
 </main>
 
-
+<script src="<?= FRONT_ASSETS ?>/js/product-gallery.js"></script>
 
 <?php
 require_once __DIR__ . '/../includes/footer.php';

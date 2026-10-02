@@ -1,0 +1,310 @@
+.products .row > [class*="col-"] {
+    display: flex;
+}
+
+.products .product {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+}
+
+.products .product-body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+}
+
+.products .product-cat {
+    min-height: 1.5em;
+}
+
+.products .product-title {
+    display: -webkit-box;
+    min-height: 2.5em;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-height: 1.25;
+    margin: 0 0 .5rem;
+}
+
+.products .ratings-container {
+    flex-wrap: wrap;
+    column-gap: .7rem;
+    row-gap: .5rem;
+    margin-top: auto;
+    white-space: normal;
+}
+
+.products .product-media {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1;
+    overflow: hidden;
+    background: #fff;
+}
+
+.products .product-media > a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+.products .product-media > a > img.product-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.table-cart .product-col .product {
+    justify-content: flex-start;
+    min-height: 76px;
+}
+
+.table-cart .product-col .product-media {
+    flex: 0 0 64px;
+    width: 64px;
+    height: 64px;
+    margin-right: 1.2rem;
+    background: #fff;
+}
+
+.table-cart .product-col .product-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.table-cart .product-col .product-title {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 767.98px) {
+    .products .product-body {
+        padding: 1.2rem 1rem 1rem;
+    }
+
+    .products .product-title {
+        font-size: 1.4rem;
+    }
+
+    .table-cart .product-col .product {
+        justify-content: flex-start;
+    }
+}
+
+@media (max-width: 991.98px) {
+    .checkout .row > .col-lg-9,
+    .checkout .row > .col-lg-3 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    .checkout .summary {
+        margin-top: 1.5rem;
+    }
+}
+
+/* ---- Shop by Price: Premium Modern Cards --------------------------------- */
+.shop-by-price-section {
+    padding: 1.5rem 0 2rem;
+}
+
+.price-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 100%;
+    min-height: 220px;
+    padding: 2.2rem 2rem;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    text-decoration: none !important;
+    color: inherit !important;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+.price-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--card-accent, #2563eb);
+    transition: height 0.25s ease;
+}
+
+.price-card:hover {
+    transform: translateY(-6px);
+    border-color: var(--card-accent, #2563eb);
+    box-shadow: 0 16px 32px var(--card-shadow, rgba(37, 99, 235, 0.12));
+}
+
+.price-card:hover::before {
+    height: 6px;
+}
+
+/* Tier Themes */
+.price-card--tier-1 {
+    --card-accent: #2563eb;
+    --card-soft: #eff6ff;
+    --card-shadow: rgba(37, 99, 235, 0.15);
+}
+
+.price-card--tier-2 {
+    --card-accent: #cc9966;
+    --card-soft: #fdf6ec;
+    --card-shadow: rgba(204, 153, 102, 0.2);
+}
+
+.price-card--tier-3 {
+    --card-accent: #059669;
+    --card-soft: #ecfdf5;
+    --card-shadow: rgba(5, 150, 105, 0.15);
+}
+
+.price-card--tier-4 {
+    --card-accent: #7c3aed;
+    --card-soft: #f5f3ff;
+    --card-shadow: rgba(124, 58, 237, 0.15);
+}
+
+/* Card Header */
+.price-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.6rem;
+}
+
+.price-card-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 1rem;
+    font-size: 1.15rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--card-accent);
+    background: var(--card-soft);
+    border-radius: 20px;
+}
+
+.price-card-icon-wrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 4rem;
+    height: 4rem;
+    border-radius: 10px;
+    background: var(--card-soft);
+    color: var(--card-accent);
+    font-size: 2rem;
+    transition: all 0.3s ease;
+}
+
+.price-card:hover .price-card-icon-wrap {
+    background: var(--card-accent);
+    color: #ffffff;
+    transform: scale(1.08) rotate(-4deg);
+}
+
+/* Card Body */
+.price-card-body {
+    margin-bottom: 1.8rem;
+}
+
+.price-card-amount {
+    display: block;
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: #111827;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.5rem;
+}
+
+.price-card-subtitle {
+    display: block;
+    font-size: 1.3rem;
+    color: #6b7280;
+    line-height: 1.4;
+}
+
+/* Card Footer */
+.price-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 1.4rem;
+    border-top: 1px solid #f3f4f6;
+}
+
+.price-card-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.25rem;
+    font-weight: 500;
+    color: #4b5563;
+}
+
+.price-card-count-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--card-accent);
+}
+
+.price-card-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--card-accent);
+    transition: transform 0.25s ease;
+}
+
+.price-card:hover .price-card-btn {
+    transform: translateX(4px);
+}
+
+.price-card-btn i {
+    font-size: 1.4rem;
+}
+
+@media (max-width: 991.98px) {
+    .price-card {
+        padding: 1.8rem 1.6rem;
+    }
+    .price-card-amount {
+        font-size: 1.9rem;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .price-card {
+        padding: 1.5rem;
+        min-height: 190px;
+    }
+    .price-card-amount {
+        font-size: 1.7rem;
+    }
+    .price-card-icon-wrap {
+        width: 3.4rem;
+        height: 3.4rem;
+        font-size: 1.6rem;
+    }
+}

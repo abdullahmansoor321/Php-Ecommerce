@@ -241,13 +241,29 @@ Database creation query :
     `description` **TEXT**,
     `price` **DECIMAL**(10, 2) **NOT** **NULL**,
     `stock` **INT** **UNSIGNED** **DEFAULT** 0,
-    `image` **VARCHAR**(**255**) **NOT** **NULL**,
+    `image` **JSON** **NOT** **NULL**,        -- up to 5 filenames, e.g. ["a.jpg","b.jpg"]; 1st = thumbnail
     `status` **TINYINT**(1) **DEFAULT** 1,
     `created_at` **TIMESTAMP** **DEFAULT** CURRENT_TIMESTAMP,
     `updated_at` **TIMESTAMP** **DEFAULT** CURRENT_TIMESTAMP ON **UPDATE** CURRENT_TIMESTAMP,
     **CONSTRAINT** `fk_products_category` **FOREIGN** **KEY** (`category_id`) 
     **REFERENCES** `categories` (`id`) ON **DELETE** **RESTRICT**
 ) **ENGINE**=InnoDB;
+
+**MIGRATION APPLIED to `products.image`** (was VARCHAR(255) NOT NULL):
+```sql
+UPDATE products SET image = JSON_ARRAY(image) WHERE JSON_VALID(image) = 0;
+ALTER TABLE products MODIFY image JSON NOT NULL;
+```
+Verified: DATA_TYPE=json, IS_NULLABLE=NO, all rows single-element arrays.
+Files are stored per product in `public/uploads/products/{product_id}/`.
+The folder is keyed by the immutable `id` (NOT the slug) so renaming a
+product can never orphan its images. `categories.image` is still
+VARCHAR(255) NULL and was deliberately left untouched.
+Rollback:
+```sql
+UPDATE products SET image = JSON_UNQUOTE(JSON_EXTRACT(image,'$[0]')) WHERE JSON_VALID(image);
+ALTER TABLE products MODIFY image VARCHAR(255) NOT NULL;
+```
 
 **CREATE** **TABLE** `orders` (
     `id` **INT** **UNSIGNED** AUTO_INCREMENT **PRIMARY** **KEY**,

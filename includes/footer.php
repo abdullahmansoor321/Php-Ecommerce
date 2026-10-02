@@ -1,3 +1,25 @@
+<?php
+/**
+ * Shared storefront footer.
+ *
+ * Renders the CTA banner, footer link columns and payment strip, then closes
+ * the .page-wrapper opened in includes/header.php and outputs the global
+ * overlays (mobile menu, auth modal, newsletter popup) and page scripts.
+ */
+$footer_year = date('Y');
+
+// Data-driven "Shop by Category" column. Falls back to a static list when the
+// database is unavailable (same defensive pattern as includes/navbar.php).
+$footer_categories = [];
+try {
+    require_once __DIR__ . '/../core/Database.php';
+    $footer_categories = Database::getInstance()->fetchAll(
+        "SELECT name, slug FROM categories WHERE status = 1 ORDER BY name ASC LIMIT 6"
+    );
+} catch (Throwable $e) {
+    $footer_categories = [];
+}
+?>
         <footer class="footer">
             <div class="cta bg-image bg-dark pt-4 pb-5 mb-0" style="background-image: url(<?= FRONT_ASSETS ?>/images/demos/demo-4/bg-5.jpg);">
                 <div class="container">
@@ -26,7 +48,7 @@
 	            		<div class="col-sm-6 col-lg-3">
 	            			<div class="widget widget-about">
 	            				<img src="<?= FRONT_ASSETS ?>/images/demos/demo-4/logo-footer.png" class="footer-logo" alt="Footer Logo" width="105" height="25">
-	            				<p>Praesent dapibus, neque id cursus ucibus, tortor neque egestas augue, eu vulputate magna eros eu erat. </p>
+	            				<p>Your one-stop shop for laptops, cameras, phones, audio and more &mdash; curated quality with fast, reliable delivery.</p>
 
 	            				<div class="widget-call">
                                     <i class="icon-phone"></i>
@@ -55,11 +77,17 @@
 	            				<h4 class="widget-title">Shop by Category</h4><!-- End .widget-title -->
 
 				<ul class="widget-list">
-					<li><a href="<?= FRONT_URL ?>/shop.php?cat=computers-laptops">Computers &amp; Laptops</a></li>
-					<li><a href="<?= FRONT_URL ?>/shop.php?cat=digital-cameras">Digital Cameras</a></li>
-					<li><a href="<?= FRONT_URL ?>/shop.php?cat=smart-phones">Smart Phones</a></li>
-					<li><a href="<?= FRONT_URL ?>/shop.php?cat=televisions">Televisions</a></li>
-					<li><a href="<?= FRONT_URL ?>/shop.php?cat=audio">Audio &amp; Speakers</a></li>
+					<?php if (!empty($footer_categories)): ?>
+						<?php foreach ($footer_categories as $footer_category): ?>
+							<li><a href="<?= FRONT_URL ?>/shop.php?category=<?= htmlspecialchars($footer_category['slug']) ?>"><?= htmlspecialchars($footer_category['name']) ?></a></li>
+						<?php endforeach; ?>
+					<?php else: ?>
+						<li><a href="<?= FRONT_URL ?>/shop.php?category=computers-laptops">Computers &amp; Laptops</a></li>
+						<li><a href="<?= FRONT_URL ?>/shop.php?category=digital-cameras">Digital Cameras</a></li>
+						<li><a href="<?= FRONT_URL ?>/shop.php?category=smart-phones">Smart Phones</a></li>
+						<li><a href="<?= FRONT_URL ?>/shop.php?category=televisions">Televisions</a></li>
+						<li><a href="<?= FRONT_URL ?>/shop.php?category=audio">Audio &amp; Speakers</a></li>
+					<?php endif; ?>
 				</ul><!-- End .widget-list -->
 	            			</div><!-- End .widget -->
 	            		</div><!-- End .col-sm-6 col-lg-3 -->
@@ -83,7 +111,7 @@
 
 	        <div class="footer-bottom">
 	        	<div class="container">
-	        		<p class="footer-copyright">Copyright © 2019 Molla Store. All Rights Reserved.</p><!-- End .footer-copyright -->
+	        		<p class="footer-copyright">Copyright &copy; <?= $footer_year ?> Molla Store. All Rights Reserved.</p><!-- End .footer-copyright -->
 	        		<figure class="footer-payments">
 	        			<img src="<?= FRONT_ASSETS ?>/images/payments.png" alt="Payment methods" width="272" height="20">
 	        		</figure><!-- End .footer-payments -->
@@ -329,21 +357,124 @@
     <script src="<?= FRONT_ASSETS ?>/js/main.js"></script>
     <script src="<?= FRONT_ASSETS ?>/js/demos/demo-4.js"></script>
     <script>
-        document.addEventListener('click', function (event) {
-            const cartLink = event.target.closest('.btn-product.btn-cart');
-            if (!cartLink || cartLink.href.includes('action=add')) {
+        function renderCartDropdown(items) {
+            const products = document.querySelector('.cart-dropdown .dropdown-cart-products');
+            if (!products) {
                 return;
             }
 
-            const productLink = cartLink.closest('.product')?.querySelector('a[href*="product.php?id="]');
-            const productId = productLink?.href.match(/[?&]id=(\d+)/)?.[1];
-            if (!productId) {
+            products.replaceChildren();
+            if (items.length === 0) {
+                const emptyMessage = document.createElement('p');
+                emptyMessage.className = 'text-center py-2 text-muted mb-0';
+                emptyMessage.textContent = 'No products in cart.';
+                products.append(emptyMessage);
+                return;
+            }
+
+            items.forEach(function (item) {
+                const product = document.createElement('div');
+                product.className = 'product';
+
+                const details = document.createElement('div');
+                details.className = 'product-cart-details';
+                const title = document.createElement('h4');
+                title.className = 'product-title';
+                const titleLink = document.createElement('a');
+                titleLink.href = '<?= FRONT_URL ?>/product.php?id=' + item.product_id;
+                titleLink.textContent = item.name;
+                title.append(titleLink);
+
+                const info = document.createElement('span');
+                info.className = 'cart-product-info';
+                const quantity = document.createElement('span');
+                quantity.className = 'cart-product-qty';
+                quantity.textContent = item.quantity;
+                info.append(quantity, document.createTextNode(' x $' + Number(item.price).toFixed(2)));
+                details.append(title, info);
+
+                const imageContainer = document.createElement('figure');
+                imageContainer.className = 'product-image-container';
+                const imageLink = document.createElement('a');
+                imageLink.className = 'product-image';
+                imageLink.href = titleLink.href;
+                const image = document.createElement('img');
+                image.src = item.image;
+                image.alt = item.name;
+                imageLink.append(image);
+                imageContainer.append(imageLink);
+
+                const removeLink = document.createElement('a');
+                removeLink.className = 'btn-remove';
+                removeLink.href = '<?= FRONT_URL ?>/cart.php?action=remove&id=' + item.product_id;
+                removeLink.title = 'Remove Product';
+                const closeIcon = document.createElement('i');
+                closeIcon.className = 'icon-close';
+                removeLink.append(closeIcon);
+
+                product.append(details, imageContainer, removeLink);
+                products.append(product);
+            });
+        }
+
+        document.addEventListener('click', function (event) {
+            const cartLink = event.target.closest('.btn-product.btn-cart');
+            if (!(cartLink instanceof HTMLAnchorElement)) {
+                return;
+            }
+
+            let addUrl = new URL(cartLink.href, window.location.href);
+            if (addUrl.searchParams.get('action') !== 'add') {
+                const productLink = cartLink.closest('.product')?.querySelector('a[href*="product.php?id="]');
+                const productId = productLink
+                    ? new URL(productLink.href, window.location.href).searchParams.get('id')
+                    : null;
+                if (!productId) {
+                    return;
+                }
+                addUrl = new URL('<?= FRONT_URL ?>/cart.php');
+                addUrl.searchParams.set('action', 'add');
+                addUrl.searchParams.set('id', productId);
+            }
+
+            if (cartLink.dataset.adding === 'true') {
                 return;
             }
 
             event.preventDefault();
-            cartLink.href = '<?= FRONT_URL ?>/cart.php?action=add&id=' + productId;
-            window.location.href = cartLink.href;
+            cartLink.dataset.adding = 'true';
+            const label = cartLink.querySelector('span');
+            const originalLabel = label?.textContent;
+
+            fetch(addUrl, {
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            })
+                .then(function (response) {
+                    return response.json().then(function (data) {
+                        if (!response.ok || !data.success) {
+                            throw new Error('Unable to add this product to the cart.');
+                        }
+                        return data;
+                    });
+                })
+                .then(function (data) {
+                    const count = document.querySelector('.cart-count');
+                    const total = document.querySelector('.cart-total-price');
+                    if (count) count.textContent = data.count;
+                    if (total) total.textContent = '$' + Number(data.total).toFixed(2);
+                    renderCartDropdown(data.items);
+                    if (label) label.textContent = 'Added to cart';
+                })
+                .catch(function () {
+                    if (label) label.textContent = 'Unable to add';
+                })
+                .finally(function () {
+                    window.setTimeout(function () {
+                        if (label && originalLabel !== null) label.textContent = originalLabel;
+                        delete cartLink.dataset.adding;
+                    }, 1400);
+                });
         });
     </script>
 </body>

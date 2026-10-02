@@ -33,6 +33,10 @@
     <link rel="stylesheet" href="<?= FRONT_ASSETS ?>/css/style.css">
     <link rel="stylesheet" href="<?= FRONT_ASSETS ?>/css/skins/skin-demo-4.css">
     <link rel="stylesheet" href="<?= FRONT_ASSETS ?>/css/demos/demo-4.css">
+    <link rel="stylesheet" href="<?= FRONT_ASSETS ?>/css/storefront-layout.css">
+    <?php foreach (($page_stylesheets ?? []) as $pageStylesheet): ?>
+        <link rel="stylesheet" href="<?= htmlspecialchars($pageStylesheet, ENT_QUOTES) ?>">
+    <?php endforeach; ?>
 </head>
 
 <body>

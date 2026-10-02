@@ -1,12 +1,12 @@
 <?php
 require_once __DIR__ . '/../config/constants.php';
 require_once __DIR__ . '/../core/Session.php';
-require_once __DIR__ . '/../core/Auth.php';
+require_once __DIR__ . '/../core/AdminAuth.php';
 
-Session::start();
-Auth::requireAdmin();
+Session::startAdmin();
+AdminAuth::requireAdmin();
 
-$adminUser = Auth::user();
+$adminUser = AdminAuth::user();
 $current_page = basename($_SERVER['PHP_SELF']);
 $current_dir = basename(dirname($_SERVER['PHP_SELF']));
 ?>
@@ -30,6 +30,10 @@ $current_dir = basename(dirname($_SERVER['PHP_SELF']));
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" />
   <!-- CSS Files -->
   <link id="pagestyle" href="<?= ADMIN_ASSETS ?>/css/material-dashboard.css?v=3.2.0" rel="stylesheet" />
+  <link href="<?= ADMIN_ASSETS ?>/css/admin-layout.css" rel="stylesheet" />
+  <?php foreach (($page_stylesheets ?? []) as $pageStylesheet): ?>
+    <link href="<?= htmlspecialchars($pageStylesheet, ENT_QUOTES) ?>" rel="stylesheet" />
+  <?php endforeach; ?>
 </head>
 
 <body class="g-sidenav-show  bg-gray-200">
@@ -83,7 +87,7 @@ $current_dir = basename(dirname($_SERVER['PHP_SELF']));
           <h6 class="ps-4 ms-2 text-uppercase text-xs font-weight-bolder opacity-6">Account pages</h6>
         </li>
         <li class="nav-item">
-          <a class="nav-link text-dark" href="<?= APP_URL ?>/public/logout.php">
+          <a class="nav-link text-dark" href="<?= APP_URL ?>/admin/logout.php">
             <i class="material-symbols-rounded opacity-5">login</i>
             <span class="nav-link-text ms-1">Logout</span>
           </a>

@@ -2,12 +2,13 @@
 require_once __DIR__ . '/../../config/constants.php';
 require_once __DIR__ . '/../../core/Database.php';
 require_once __DIR__ . '/../../core/Session.php';
-require_once __DIR__ . '/../../core/Auth.php';
+require_once __DIR__ . '/../../core/AdminAuth.php';
 require_once __DIR__ . '/../../core/Csrf.php';
 require_once __DIR__ . '/../../core/Mailer.php';
+require_once __DIR__ . '/../../core/ProductImage.php';
 
-Session::start();
-Auth::requireAdmin();
+Session::startAdmin();
+AdminAuth::requireAdmin();
 
 $db = Database::getInstance();
 $id = (int)($_GET['id'] ?? 0);
@@ -28,7 +29,7 @@ if (!$order) {
 // Fetched before the POST handler because the payment-received email below
 // needs the line items at send time, and the handler exits via redirect.
 $orderItems = $db->fetchAll("
-    SELECT oi.*, p.name as product_name, p.image as product_image 
+    SELECT oi.*, p.id as product_id, p.name as product_name, p.image as product_image 
     FROM order_items oi 
     JOIN products p ON oi.product_id = p.id 
     WHERE oi.order_id = ?
@@ -496,10 +497,10 @@ require_once __DIR__ . '/../../includes/admin-header.php';
                                         <div class="d-flex px-3 py-1 align-items-center">
                                             <div>
                                                 <?php
-                                                $itemImageFile = !empty($item['product_image']) ? basename($item['product_image']) : '';
-                                                if ($itemImageFile !== '' && is_file(BASE_PATH . '/public/uploads/products/' . $itemImageFile)):
+                                                $itemImageUrl = ProductImage::exists((int)($item['product_id'] ?? 0), $item['product_image'] ?? null) ? ProductImage::url((int)$item['product_id'], ProductImage::first($item['product_image'])) : '';
+                                                if ($itemImageUrl !== ''):
                                                 ?>
-                                                    <img src="<?= UPLOADS_URL ?>/products/<?= rawurlencode($itemImageFile) ?>" class="avatar avatar-sm me-3 border-radius-lg" alt="product image" style="object-fit: cover;">
+                                                    <img src="<?= htmlspecialchars($itemImageUrl) ?>" class="avatar avatar-sm me-3 border-radius-lg" alt="product image" style="object-fit: cover;">
                                                 <?php endif; ?>
                                             </div>
                                             <h6 class="mb-0 text-sm"><?= htmlspecialchars($item['product_name']) ?></h6>

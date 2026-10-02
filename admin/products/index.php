@@ -3,16 +3,42 @@ require_once __DIR__ . '/../../config/constants.php';
 require_once __DIR__ . '/../../core/Database.php';
 require_once __DIR__ . '/../../core/Session.php';
 require_once __DIR__ . '/../../core/Csrf.php';
+require_once __DIR__ . '/../../core/ProductImage.php';
 
 $page_title = "Manage Products";
 require_once __DIR__ . '/../../includes/admin-header.php';
 
 $db = Database::getInstance();
 
-// Pagination setup
+// Search term (name / slug / description) plus category and status facets.
+// Every value is either bound as a parameter or checked against a whitelist,
+// so nothing user-supplied is ever concatenated into SQL.
+$search = trim((string)($_GET['q'] ?? ''));
+$statusFilter = (string)($_GET['status'] ?? '');
+$categoryFilter = (int)($_GET['category'] ?? 0);
+
+$where = [];
+$params = [];
+if ($search !== '') {
+    $where[] = '(p.name LIKE ? OR p.slug LIKE ? OR p.description LIKE ?)';
+    $like = '%' . $search . '%';
+    $params[] = $like;
+    $params[] = $like;
+    $params[] = $like;
+}
+if ($statusFilter === 'active')   { $where[] = 'p.status = 1'; }
+if ($statusFilter === 'inactive') { $where[] = 'p.status = 0'; }
+if ($categoryFilter > 0) {
+    $where[] = 'p.category_id = ?';
+    $params[] = $categoryFilter;
+}
+$whereSql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
+
+// Pagination setup. The count query mirrors the list query's joins so the
+// totals always agree with the rows actually shown.
 $perPage = 10;
 $page = max(1, (int)($_GET['page'] ?? 1));
-$totalRows = (int)($db->fetchOne("SELECT COUNT(*) as c FROM products")['c'] ?? 0);
+$totalRows = (int)($db->fetchOne("SELECT COUNT(*) as c FROM products p JOIN categories c ON p.category_id = c.id $whereSql", $params)['c'] ?? 0);
 $totalPages = max(1, (int)ceil($totalRows / $perPage));
 $page = min($page, $totalPages);
 $offset = ($page - 1) * $perPage;
@@ -22,9 +48,28 @@ $products = $db->fetchAll("
     SELECT p.*, c.name as category_name 
     FROM products p 
     JOIN categories c ON p.category_id = c.id 
+    $whereSql
     ORDER BY p.created_at DESC
     LIMIT ? OFFSET ?
-", [$perPage, $offset]);
+", array_merge($params, [$perPage, $offset]));
+
+// Options for the filter toolbar.
+$admin_categories = $db->fetchAll("SELECT id, name FROM categories ORDER BY name ASC");
+$filterSearchTerm  = $search;
+$filterResultCount = $totalRows;
+$filterResultNoun  = 'products';
+$filterSelects = [
+    'category' => [
+        'label'   => 'Category',
+        'value'   => $categoryFilter > 0 ? (string)$categoryFilter : '',
+        'options' => ['' => 'All categories'] + array_column($admin_categories, 'name', 'id'),
+    ],
+    'status' => [
+        'label'   => 'Status',
+        'value'   => $statusFilter,
+        'options' => ['' => 'All statuses', 'active' => 'Active', 'inactive' => 'Inactive'],
+    ],
+];
 ?>
 
 <div class="row">
@@ -47,6 +92,8 @@ $products = $db->fetchAll("
                     <div class="alert alert-danger text-white mx-4" role="alert"><?= htmlspecialchars($error) ?></div>
                 <?php endif; ?>
 
+                <?php require __DIR__ . '/../../includes/admin-filters.php'; ?>
+
                 <div class="table-responsive p-0">
                     <table class="table align-items-center mb-0">
                         <thead>
@@ -62,7 +109,7 @@ $products = $db->fetchAll("
                         <tbody>
                             <?php if (empty($products)): ?>
                                 <tr>
-                                    <td colspan="6" class="text-center py-4 text-muted">No products found. Add your first product!</td>
+                                    <td colspan="6" class="text-center py-4 text-muted"><?= ($search !== '' || $statusFilter !== '' || $categoryFilter > 0) ? 'No products match your filters.' : 'No products found. Add your first product!' ?></td>
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($products as $prod): ?>
@@ -70,11 +117,8 @@ $products = $db->fetchAll("
                                         <td>
                                             <div class="d-flex px-3 py-1 align-items-center">
                                                 <div>
-                                                    <?php
-                                                    $prodImageFile = !empty($prod['image']) ? basename($prod['image']) : '';
-                                                    if ($prodImageFile !== '' && is_file(BASE_PATH . '/public/uploads/products/' . $prodImageFile)):
-                                                    ?>
-                                                        <img src="<?= UPLOADS_URL ?>/products/<?= rawurlencode($prodImageFile) ?>" class="avatar avatar-sm me-3 border-radius-lg" alt="product image" style="object-fit: cover;">
+                                                    <?php if (ProductImage::exists((int)$prod['id'], $prod['image'] ?? null)): ?>
+                                                        <img src="<?= htmlspecialchars(ProductImage::url((int)$prod['id'], ProductImage::first($prod['image']))) ?>" class="avatar avatar-sm me-3 border-radius-lg" alt="product image" style="object-fit: cover;">
                                                     <?php else: ?>
                                                         <div class="avatar avatar-sm me-3 bg-gradient-secondary border-radius-lg d-flex align-items-center justify-content-center text-white">
                                                             <i class="material-symbols-rounded text-sm">inventory_2</i>

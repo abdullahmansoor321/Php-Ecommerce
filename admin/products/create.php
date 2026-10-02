@@ -4,11 +4,13 @@ require_once __DIR__ . '/../../core/Database.php';
 require_once __DIR__ . '/../../core/Session.php';
 require_once __DIR__ . '/../../core/FileUploader.php';
 require_once __DIR__ . '/../../core/Validator.php';
-require_once __DIR__ . '/../../core/Auth.php';
+require_once __DIR__ . '/../../core/AdminAuth.php';
 require_once __DIR__ . '/../../core/Csrf.php';
+require_once __DIR__ . '/../../core/Slug.php';
+require_once __DIR__ . '/../../core/ProductImage.php';
 
-Session::start();
-Auth::requireAdmin();
+Session::startAdmin();
+AdminAuth::requireAdmin();
 
 $db = Database::getInstance();
 $categories = $db->fetchAll("SELECT id, name FROM categories WHERE status = 1 ORDER BY name ASC");
@@ -30,9 +32,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = trim($_POST['name'] ?? '');
     $slug = trim($_POST['slug'] ?? '');
     if (empty($slug)) {
-        $slug = strtolower(trim(preg_replace('/[^A-Za-z0-9-]+/', '-', $name), '-'));
+        $slug = Slug::generate($name);
     }
-    $categoryId = (int)($_POST['category_id'] ?? 0);
+    $categoryId = trim($_POST['category_id'] ?? '');
     $description = trim($_POST['description'] ?? '');
     $price = trim($_POST['price'] ?? '');
     $stock = (int)($_POST['stock'] ?? 0);
@@ -57,32 +59,119 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($existing) {
             $errors['slug'] = 'Product slug already exists. Choose another.';
         } else {
-            $imageName = null;
-            if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-                $uploadDir = BASE_PATH . '/public/uploads/products';
-                $imageName = FileUploader::uploadImage($_FILES['image'], $uploadDir);
-                if (!$imageName) {
-                    $errors['image'] = 'Invalid image file or size exceeds 2MB limit (allowed: JPEG, PNG, WEBP).';
+            $imageNames = [];
+            $imageError = null;
+
+            if (isset($_FILES['images'])) {
+                $oversize = count(array_filter($_FILES['images']['name'] ?? [])) > FileUploader::MAX_IMAGES;
+                if ($oversize) {
+                    $imageError = 'You can upload at most ' . FileUploader::MAX_IMAGES . ' images at once.';
+                } else {
+                    [$storedByIndex, $rejected] = FileUploader::uploadImagesIndexed($_FILES['images'], BASE_PATH . '/public/uploads/products');
+                    $order = is_array($_POST['image_order'] ?? null) ? $_POST['image_order'] : [];
+                    $galleryManaged = ($_POST['image_manager'] ?? '0') === '1';
+                    foreach ($order as $token) {
+                        if (is_string($token) && preg_match('/^new:(\d+)$/', $token, $match)) {
+                            $index = (int)$match[1];
+                            if (isset($storedByIndex[$index])) {
+                                $imageNames[] = $storedByIndex[$index];
+                                unset($storedByIndex[$index]);
+                            }
+                        }
+                    }
+                    foreach ($storedByIndex as $storedName) {
+                        if ($galleryManaged) {
+                            $staged = BASE_PATH . '/public/uploads/products/' . $storedName;
+                            if (is_file($staged)) {
+                                @unlink($staged);
+                            }
+                        } else {
+                            $imageNames[] = $storedName;
+                        }
+                    }
+
+                    if (empty($imageNames)) {
+                        $imageError = 'No valid images. Use JPEG, PNG, WEBP or GIF, max 2MB each.';
+                    } elseif ($rejected > 0) {
+                        Session::setFlash('error', $rejected . ' image(s) were skipped: not a supported image type or over 2MB.');
+                    }
                 }
             } else {
-                $errors['image'] = 'Product image is required.';
+                $imageError = 'At least one product image is required.';
+            }
+
+            if (empty($errors) && $imageError !== null) {
+                $errors['image'] = $imageError;
             }
 
             if (empty($errors)) {
-                $db->query(
-                    "INSERT INTO products (category_id, name, slug, description, price, stock, image, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    [$categoryId, $name, $slug, $description, (float)$price, $stock, $imageName, $status]
-                );
+                $connection = $db->getConnection();
+                $newProductId = 0;
+                $productFolder = '';
+                $transactionStarted = false;
 
-                Session::setFlash('success', 'Product created successfully!');
-                header('Location: ' . APP_URL . '/admin/products/index.php');
-                exit;
+                try {
+                    $connection->begin_transaction();
+                    $transactionStarted = true;
+                    $db->query(
+                        "INSERT INTO products (category_id, name, slug, description, price, stock, image, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        [$categoryId !== '' ? (int)$categoryId : 0, $name, $slug, $description, (float)$price, $stock, ProductImage::encode([]), $status]
+                    );
+
+                    $newProductId = $db->lastInsertId();
+                    $productFolder = UPLOADS_PATH . '/products/' . $newProductId;
+                    if (!is_dir($productFolder) && !mkdir($productFolder, 0755, true) && !is_dir($productFolder)) {
+                        throw new RuntimeException('Unable to create the product image folder.');
+                    }
+
+                    $finalNames = [];
+                    foreach ($imageNames as $stagedName) {
+                        $staged = BASE_PATH . '/public/uploads/products/' . $stagedName;
+                        if (!is_file($staged) || !@rename($staged, $productFolder . '/' . $stagedName)) {
+                            throw new RuntimeException('Unable to move a product image.');
+                        }
+                        $finalNames[] = $stagedName;
+                    }
+
+                    if (empty($finalNames)) {
+                        throw new RuntimeException('No product images were saved.');
+                    }
+
+                    $db->query(
+                        "UPDATE products SET image = ? WHERE id = ?",
+                        [ProductImage::encode($finalNames), $newProductId]
+                    );
+                    $connection->commit();
+
+                    Session::setFlash('success', 'Product created successfully!');
+                    header('Location: ' . APP_URL . '/admin/products/index.php');
+                    exit;
+                } catch (Throwable $exception) {
+                    if ($transactionStarted) {
+                        $connection->rollback();
+                    }
+                    foreach ($imageNames as $stagedName) {
+                        $staged = BASE_PATH . '/public/uploads/products/' . $stagedName;
+                        $final = $productFolder !== '' ? $productFolder . '/' . $stagedName : '';
+                        if (is_file($staged)) {
+                            @unlink($staged);
+                        }
+                        if ($final !== '' && is_file($final)) {
+                            @unlink($final);
+                        }
+                    }
+                    if ($productFolder !== '' && is_dir($productFolder)) {
+                        @rmdir($productFolder);
+                    }
+                    $errors['image'] = 'The product and its images could not be saved. Please try again.';
+                }
             }
         }
     }
 }
 
 $page_title = "Add Product";
+$page_stylesheets = [ADMIN_ASSETS . '/css/product-image-manager.css'];
 require_once __DIR__ . '/../../includes/admin-header.php';
 ?>
 
@@ -107,7 +196,7 @@ require_once __DIR__ . '/../../includes/admin-header.php';
                     </div>
                 <?php endif; ?>
 
-                <form role="form" action="" method="POST" enctype="multipart/form-data">
+                <form role="form" action="" method="POST" enctype="multipart/form-data" novalidate>
                     <?= Csrf::field() ?>
                     <div class="row">
                         <div class="col-md-6">
@@ -154,9 +243,20 @@ require_once __DIR__ . '/../../includes/admin-header.php';
                         <textarea class="form-control" name="description" rows="4" placeholder="Product description..."><?= htmlspecialchars($description) ?></textarea>
                     </div>
 
-                    <div class="mb-3">
-                        <label class="form-label text-xs text-secondary">Product Image * (Max 2MB)</label>
-                        <input type="file" class="form-control border px-2 py-1" name="image" accept="image/*" required>
+                    <div class="mb-4" data-product-image-manager data-max-images="<?= FileUploader::MAX_IMAGES ?>" data-max-bytes="<?= FileUploader::MAX_BYTES ?>" data-required="true">
+                        <label class="form-label text-dark text-xs font-weight-bold mb-2 d-block">Product Images *</label>
+                        <div class="product-image-dropzone" data-image-dropzone>
+                            <label class="product-image-picker">
+                                Add images
+                                <input type="file" name="images[]" accept="image/jpeg,image/png,image/webp,image/gif" multiple data-image-input>
+                            </label>
+                            <span class="text-xs text-secondary ms-2">or drop files here. JPEG, PNG, WEBP or GIF; up to 2MB each.</span>
+                            <p class="product-image-feedback mb-0" data-image-feedback role="status" aria-live="polite"></p>
+                            <p class="product-image-errors" data-image-errors role="alert"></p>
+                            <div class="product-image-grid" data-image-grid></div>
+                            <input type="hidden" name="image_manager" value="0" data-image-manager-state>
+                            <div data-image-order></div>
+                        </div>
                     </div>
 
                     <div class="form-check form-switch ps-0 ms-0 mb-4">
@@ -173,6 +273,7 @@ require_once __DIR__ . '/../../includes/admin-header.php';
     </div>
 </div>
 
+<script src="<?= ADMIN_ASSETS ?>/js/product-image-manager.js"></script>
 <?php
 require_once __DIR__ . '/../../includes/admin-footer.php';
 ?>

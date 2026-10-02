@@ -1,13 +1,13 @@
 <?php
 require_once __DIR__ . '/../config/constants.php';
 require_once __DIR__ . '/../core/Session.php';
-require_once __DIR__ . '/../core/Auth.php';
+require_once __DIR__ . '/../core/AdminAuth.php';
 require_once __DIR__ . '/../core/Csrf.php';
 
-Session::start();
+Session::startAdmin();
 
 // If already logged in as admin, redirect to dashboard
-if (Auth::isAdmin()) {
+if (AdminAuth::isAdmin()) {
     header('Location: ' . APP_URL . '/admin/index.php');
     exit;
 }
@@ -24,13 +24,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($email) || empty($password)) {
         $error = 'Please enter both email and password.';
     } else {
-        if (Auth::login($email, $password)) {
-            if (Auth::isAdmin()) {
+        if (AdminAuth::login($email, $password)) {
+            if (AdminAuth::isAdmin()) {
                 Session::setFlash('success', 'Welcome back, Administrator!');
                 header('Location: ' . APP_URL . '/admin/index.php');
                 exit;
             } else {
-                Auth::logout();
+                AdminAuth::logout();
                 $error = 'Access denied. Administrator privileges required.';
             }
         } else {
